@@ -4,10 +4,13 @@ import { type InputInst ***REMOVED*** from 'naive-ui'
 import { useRouter ***REMOVED*** from 'vue-router'
 import { UAParser ***REMOVED*** from 'ua-parser-js'
 import TableModal from './TableModal.vue'
-
+import DefaultPage from './DefaultPage.vue'
 const route = useRoute(***REMOVED***
 const router = useRouter(***REMOVED***
 const message = useMessage(***REMOVED***
+
+// 显示默认页面
+const showDefaultPage = ref(true***REMOVED***
 
 //全局存储
 const businessStore = useBusinessStore(***REMOVED***
@@ -40,6 +43,13 @@ function handleModalClose(value***REMOVED*** {
         tableData,
         currentRenderIndex
     ***REMOVED***
+***REMOVED***
+
+//新建对话
+function newChat(***REMOVED*** {
+    showDefaultPage.value = true
+    isInit.value = false
+    conversationItems.value = []
 ***REMOVED***
 
 /**
@@ -133,7 +143,7 @@ const visibleConversationItems = computed((***REMOVED*** => {
 
 //提交对话
 const handleCreateStylized = async (send_text = ''***REMOVED*** => {
-    isInit.value = false
+    // isInit.value = false
     // 若正在加载，则点击后恢复初始状态
     if (stylizingLoading.value***REMOVED*** {
         onCompletedReader(conversationItems.value.length - 1***REMOVED***
@@ -147,6 +157,13 @@ const handleCreateStylized = async (send_text = ''***REMOVED*** => {
             refInputTextString.value.focus(***REMOVED***
             return
         ***REMOVED***
+    ***REMOVED***
+
+    // 新建对话 时输入新问题 清空历史数据
+    if (showDefaultPage.value***REMOVED*** {
+        conversationItems.value = []
+        showDefaultPage.value = false
+        isInit.value = false
     ***REMOVED***
 
     //加入对话历史用于左边表格渲染
@@ -330,6 +347,21 @@ const setMarkdownPreview = (index: number, el: any***REMOVED*** => {
 
 // 滚动到指定位置的方法
 const scrollToItem = (index: number***REMOVED*** => {
+    //判断默认页面是否显示或对话历史是否初始化
+    if (
+        (!showDefaultPage.value && !isInit.value***REMOVED*** ||
+        conversationItems.value.length === 0
+    ***REMOVED*** {
+        fetchConversationHistory(
+            isInit,
+            conversationItems,
+            tableData,
+            currentRenderIndex
+        ***REMOVED***
+        console.log(isInit.value***REMOVED***
+    ***REMOVED***
+    //关闭默认页面
+    showDefaultPage.value = false
     if (markdownPreviews.value[index]***REMOVED*** {
         markdownPreviews.value[index].scrollIntoView({ behavior: 'smooth' ***REMOVED******REMOVED***
     ***REMOVED***
@@ -342,6 +374,7 @@ const scrollToItem = (index: number***REMOVED*** => {
                 type="primary"
                 icon-placement="left"
                 color="#5e58e7"
+                @click="newChat"
                 strong
                 style="
                     width: 160px;
@@ -429,7 +462,12 @@ const scrollToItem = (index: number***REMOVED*** => {
                 class="scrollable-container"
                 ref="messagesContainer"
   ***REMOVED***
+      ***REMOVED***v-if="showDefaultPage">
+                    <DefaultPage />
+    ***REMOVED***
+
                 <div
+                    v-if="!showDefaultPage"
                     v-for="(item, index***REMOVED*** in visibleConversationItems"
                     :key="index"
                     class="mb-4"
@@ -578,5 +616,12 @@ const scrollToItem = (index: number***REMOVED*** => {
 
 :deep(.custom-table .n-data-table-thead***REMOVED*** {
     display: none;
+***REMOVED***
+.default-page {
+  ***REMOVED***
+    justify-content: center;
+    align-items: center;
+    height: 100vh; /* 使容器高度占满整个视口 */
+    background-color: #f0f2f5; /* 可选：设置背景颜色 */
 ***REMOVED***
 ***REMOVED***
