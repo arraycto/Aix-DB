@@ -452,8 +452,8 @@ const onChartCompletedReader = function (***REMOVED*** {
 ***REMOVED***
     margin-left: 10%;
     margin-right: 10%;
-    // background-color: #ffffff;
-    background: linear-gradient(to right, #f0effe, #d4eefc***REMOVED***;
+    background-color: #ffffff;
+    // background: linear-gradient(to right, #f0effe, #d4eefc***REMOVED***;
     padding: 30px;
     // font-family: 'PMingLiU';
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
@@ -572,6 +572,10 @@ const onChartCompletedReader = function (***REMOVED*** {
     ***REMOVED***
     th {
         background-color: #f2f2f2; /* 可选：给表头设置背景色 */
+    ***REMOVED***
+    code {
+      ***REMOVED***
+        color: #333;
     ***REMOVED***
 ***REMOVED***
 ***REMOVED***

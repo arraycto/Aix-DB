@@ -11,8 +11,8 @@ withDefaults(defineProps<Props>(***REMOVED***, {
 ***REMOVED******REMOVED***
 
 const handleToRepo = (***REMOVED*** => {
-    const link = ref('https://github.com/pdsuwwz/chatgpt-vue3-light-mvp'***REMOVED***
-    // window.open(link.value, '_blank'***REMOVED***
+    const link = ref('https://github.com/apconw/sanic-web'***REMOVED***
+    window.open(link.value, '_blank'***REMOVED***
 ***REMOVED***
 ***REMOVED***
 
