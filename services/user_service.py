@@ -188,3 +188,4 @@ async def send_dify_feedback(chat_id, rating***REMOVED***:
         logger.info("Feedback successfully sent."***REMOVED***
     else:
         logger.error(f"Failed to send feedback. Status code: {response.status_code***REMOVED***,Response body: {response.text***REMOVED***"***REMOVED***
+        raise

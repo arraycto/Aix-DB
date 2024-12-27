@@ -1,5 +1,4 @@
 <script lang="ts" setup>
-import { isMockDevelopment ***REMOVED*** from '@/config'
 import MarkdownInstance from './plugins/markdown'
 import MarkdownEcharts from './MarkdownEcharts.vue'
 const { copy, copyDuration ***REMOVED*** = useClipText(***REMOVED***
@@ -9,7 +8,6 @@ import {
 ***REMOVED*** from './transform'
 import MarkdownTable from './MarkdownTable.vue'
 import { watch ***REMOVED*** from 'vue'
-import { c ***REMOVED*** from 'naive-ui'
 
 interface Props {
     isInit: boolean
@@ -131,6 +129,8 @@ const initializeEnd = (***REMOVED*** => {
 
 // 定义图表类型
 const currentChartType = ref(''***REMOVED***
+
+//读取数据流
 const readTextStream = async (***REMOVED*** => {
     if (!props.reader***REMOVED*** return
 
@@ -207,6 +207,7 @@ const scrollToBottomByThreshold = async (***REMOVED*** => {
     ***REMOVED***
 ***REMOVED***
 
+// 滚动到底部
 const scrollToBottomIfAtBottom = async (***REMOVED*** => {
     scrollToBottomByThreshold(***REMOVED***
 ***REMOVED***
@@ -248,8 +249,8 @@ const showText = (***REMOVED*** => {
                 typingAnimationFrame = requestAnimationFrame(showText***REMOVED***
             ***REMOVED***,
             (***REMOVED*** => {
-                let dataType = businessStore.writerList.dataType
                 //这里只有需要显示图表数据时才显示图表
+                let dataType = businessStore.writerList.dataType
                 if (dataType && dataType === 't04'***REMOVED*** {
                     currentChartType.value =
                         businessStore.writerList.data.template_code

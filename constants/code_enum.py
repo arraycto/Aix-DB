@@ -53,3 +53,5 @@ class DiFyCodeEnum(Enum***REMOVED***:
     MESSAGE = ("message", "答案"***REMOVED***
 
     MESSAGE_END = ("message_end", "结束"***REMOVED***
+
+    MESSAGE_ERROR = ("error", "错误"***REMOVED***

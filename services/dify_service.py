@@ -3,10 +3,9 @@ import logging
 import os
 import re
 import traceback
-import uuid
-from typing import Dict
 
 import aiohttp
+import requests
 
 from common.exception import MyException
 from constants.code_enum import (
@@ -17,7 +16,9 @@ from constants.code_enum import (
 ***REMOVED***
 from constants.dify_rest_api import DiFyRestApi
 from services.db_qadata_process import process
-from services.user_service import add_question_record
+from services.user_service import add_question_record, query_user_qa_record
+
+logger = logging.getLogger(__name__***REMOVED***
 
 
 class QaContext:
@@ -102,6 +103,7 @@ class DiFyRequest:
                                 conversation_id = data_json.get("conversation_id"***REMOVED***
                                 message_id = data_json.get("message_id"***REMOVED***
                                 task_id = data_json.get("task_id"***REMOVED***
+
                                 if DiFyCodeEnum.MESSAGE.value[0] == event_name:
                                     answer = data_json.get("answer"***REMOVED***
                                     if answer and answer.startswith("dify_"***REMOVED***:
@@ -165,6 +167,12 @@ class DiFyRequest:
                                         # 这里设置业务数据
                                         if data_type == DataTypeEnum.BUS_DATA.value[0]:
                                             bus_data = answer
+
+                                elif DiFyCodeEnum.MESSAGE_ERROR.value[0] == event_name:
+                                    # 输出异常情况日志
+                                    error_msg = data_json.get("message"***REMOVED***
+                                    logging.error(f"Error during get_answer: {error_msg***REMOVED***"***REMOVED***
+
         except Exception as e:
             logging.error(f"Error during get_answer: {e***REMOVED***"***REMOVED***
             traceback.print_exception(e***REMOVED***
@@ -271,3 +279,28 @@ class DiFyRequest:
                 return os.getenv("DIFY_DATABASE_QA_API_KEY"***REMOVED***
         else:
             raise ValueError(f"问答类型 '{qa_type***REMOVED***' 不支持"***REMOVED***
+
+
+async def query_dify_suggested(chat_id***REMOVED*** -> dict:
+    """
+    发送反馈给指定的消息ID。
+
+    :param chat_id: 消息的唯一标识符。
+    :return: 返回服务器响应。
+    """
+    # 查询对话记录
+    qa_record = query_user_qa_record(chat_id***REMOVED***
+    url = DiFyRestApi.replace_path_params(DiFyRestApi.DIFY_REST_SUGGESTED, {"message_id": chat_id***REMOVED******REMOVED***
+    api_key = os.getenv("DIFY_DATABASE_QA_API_KEY"***REMOVED***
+    headers = {"Authorization": f"Bearer {api_key***REMOVED***", "Content-Type": "application/json"***REMOVED***
+
+    response = requests.get(url + "?user=abc-123", headers=headers***REMOVED***
+    print(response.text***REMOVED***
+
+    # 检查请求是否成功
+    if response.status_code == 200:
+        logger.info("Feedback successfully sent."***REMOVED***
+        return response.json(***REMOVED***
+    else:
+        logger.error(f"Failed to send feedback. Status code: {response.status_code***REMOVED***,Response body: {response.text***REMOVED***"***REMOVED***
+        raise
