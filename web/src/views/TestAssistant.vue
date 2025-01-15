@@ -22,31 +22,25 @@ const loading = ref(false***REMOVED***
 ***REMOVED***
 ***REMOVED***
     <LayoutCenterPanel :loading="loading">
-        <template #sidebar>
-  ***REMOVED***flex="~ col" h-full style="background-color: #f6f7fb">
-      ***REMOVED***flex="~ justify-between items-center">
-                    <NavigationNavBar />
-    ***REMOVED***
+        <div flex="~ col" h-full style="background-color: #f6f7fb">
+  ***REMOVED***flex="~ justify-between items-center">
+                <NavigationNavBar />
+***REMOVED***
 
-      ***REMOVED***flex="1 ~ col" min-h-0 pb-20>
-          ***REMOVED***class="mind">
-                        <div
-                            class="svg-container"
-                            style="height: 100%; width: 100%"
-              ***REMOVED***
-                            <svg
-                                ref="svgRef"
-                                style="
-                                ***REMOVED***
-                                  ***REMOVED***
-                                  ***REMOVED***
-                                "
-                  ***REMOVED***</svg>
-            ***REMOVED***
+  ***REMOVED***flex="1 ~ col" min-h-0 pb-20>
+      ***REMOVED***class="mind">
+                    <div
+                        class="svg-container"
+                        style="height: 100%; width: 100%"
+          ***REMOVED***
+                        <svg
+                            ref="svgRef"
+                            style="display: block; height: 100%; width: 100%"
+              ***REMOVED***</svg>
         ***REMOVED***
     ***REMOVED***
 ***REMOVED***
-        ***REMOVED***
+***REMOVED***
     </LayoutCenterPanel>
 ***REMOVED***
 

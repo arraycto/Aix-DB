@@ -25,15 +25,15 @@
                 style="
                   ***REMOVED***
                     justify-content: space-between;
-                    margin-bottom: 10`px;
+                  ***REMOVED***
                 "
   ***REMOVED***</div>
             <n-data-table
                 style="
                     height: 550px;
-                  ***REMOVED***
+                    width: 850px;
+                    margin: 0px 10px;
                     background-color: #ffffff;
-                  ***REMOVED***
                 "
                 :columns="columns"
                 :data="pagedTableData"
@@ -84,7 +84,7 @@ const pagination = computed((***REMOVED*** => ({
 const scrollX = computed((***REMOVED*** => {
     if (tableData.value.length > 0***REMOVED*** {
         const keys = Object.keys(tableData.value[0]***REMOVED***
-        const totalWidth = keys.length * 100 // 每列宽度100px
+        const totalWidth = keys.length * 120 // 每列宽度100px
         return totalWidth
     ***REMOVED***
     return 0

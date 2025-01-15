@@ -1,6 +1,6 @@
 <script lang="tsx" setup>
 import { isMockDevelopment ***REMOVED*** from '@/config'
-import { type InputInst ***REMOVED*** from 'naive-ui'
+import { scrollbarProps, type InputInst ***REMOVED*** from 'naive-ui'
 import { useRouter ***REMOVED*** from 'vue-router'
 import { UAParser ***REMOVED*** from 'ua-parser-js'
 import TableModal from './TableModal.vue'
@@ -11,6 +11,7 @@ const route = useRoute(***REMOVED***
 const router = useRouter(***REMOVED***
 const message = useMessage(***REMOVED***
 import * as GlobalAPI from '@/api'
+import { size ***REMOVED*** from 'lodash-es'
 
 // 显示默认页面
 const showDefaultPage = ref(true***REMOVED***
@@ -614,97 +615,39 @@ function handleSelect(key: string***REMOVED*** {
         ***REMOVED******REMOVED***
     ***REMOVED***
 ***REMOVED***
+
+// 侧边表格滚动条数 动态显示隐藏设置
+const scrollableContainer = ref(null***REMOVED***
+const showScrollbar = (***REMOVED*** => {
+    if (
+        scrollableContainer.value &&
+        scrollableContainer.value.$el &&
+        scrollableContainer.value.$el.firstElementChild
+    ***REMOVED*** {
+        scrollableContainer.value.$el.firstElementChild.style.overflowY = 'auto'
+    ***REMOVED***
+***REMOVED***
+
+const hideScrollbar = (***REMOVED*** => {
+    if (
+        scrollableContainer.value &&
+        scrollableContainer.value.$el &&
+        scrollableContainer.value.$el.firstElementChild
+    ***REMOVED*** {
+        scrollableContainer.value.$el.firstElementChild.style.overflowY =
+            'hidden'
+    ***REMOVED***
+***REMOVED***
 ***REMOVED***
 ***REMOVED***
     <LayoutCenterPanel :loading="loading">
-        <!-- <template #sidebar-header>
-            <n-button
-                type="primary"
-                icon-placement="left"
-                color="#5e58e7"
-                @click="newChat"
-                strong
-                style="
-                    width: 180px;
-                    height: 38px;
-                    margin: 15px;
-                    align-self: center;
-                    text-align: center;
-                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI',
-                        Roboto, 'Helvetica Neue', Arial, sans-serif;
-                    font-weight: bold;
-                    font-size: 14px;
-                    border-radius: 15px;
-                "
-  ***REMOVED***
-                <template #icon>
-                    <n-icon style="margin-right: 5px">
-              ***REMOVED***class="i-hugeicons:add-01"></div>
-                    </n-icon>
-                ***REMOVED***
-                新建对话
-            </n-button>
-        ***REMOVED***
-
-        <template #sidebar>
-            <n-data-table
-                class="custom-table"
-                style="
-                    --n-td-color-hover: #d5dcff;
-                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI',
-                        Roboto, 'Helvetica Neue', Arial, sans-serif;
-                "
-                size="small"
-                :bordered="false"
-                :bottom-bordered="false"
-                :columns="[
-                  ***REMOVED*** key: 'key', align: 'left', ellipsis: { tooltip: false ***REMOVED*** ***REMOVED***
-            ***REMOVED***"
-                :data="tableData"
-                ref="tableRef"
-                :row-props="rowProps"
-  ***REMOVED***
-                <template #empty>
-                    <div></div>
-                ***REMOVED***
-            </n-data-table>
-        ***REMOVED***
-
-        <template #sidebar-action>
-            <n-divider style="width: 180px" />
-            <n-button
-                quaternary
-                icon-placement="left"
-                type="primary"
-                strong
-                @click="openModal"
-                style="
-                    width: 150px;
-                    height: 38px;
-                    align-self: center;
-                    text-align: center;
-                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI',
-                        Roboto, 'Helvetica Neue', Arial, sans-serif;
-                    font-size: 14px;
-                "
-  ***REMOVED***
-                <template #icon>
-                    <n-icon>
-              ***REMOVED***class="i-hugeicons:voice-id"></div>
-                    </n-icon>
-                ***REMOVED***
-                管理对话
-            </n-button>
-
-            <TableModal :show="isModalOpen" @update:show="handleModalClose" />
-        ***REMOVED*** -->
         <div
             class="flex justify-between items-center h-full"
             style="background: linear-gradient(to bottom, #8874f1, #588af9***REMOVED***"
         >
             <!-- 第一列，宽度为200px -->
             <div
-                class="w-[240px]"
+                class="w-[260px]"
                 style="
                     height: 98%;
                     margin: 10px 0px;
@@ -715,8 +658,25 @@ function handleSelect(key: string***REMOVED*** {
                   ***REMOVED***
                 "
   ***REMOVED***
-                <n-layout class="custom-layout">
-                    <n-layout-header class="header" style="flex-shrink: 0">
+                <n-layout
+                    class="custom-layout"
+                    :native-scrollbar="true"
+                    ref="scrollableContainer"
+                    @mouseenter="showScrollbar"
+                    @mouseleave="hideScrollbar"
+      ***REMOVED***
+                    <n-layout-header
+                        class="header"
+                        style="
+                          ***REMOVED*** /* 使用Flexbox布局 */
+                            align-items: center; /* 垂直居中对齐 */
+                            justify-content: start; /* 水平分布空间 */
+                            flex-shrink: 0;
+                            position: sticky;
+                            top: 0;
+                            z-index: 1;
+                        "
+          ***REMOVED***
                         <n-button
                             type="primary"
                             icon-placement="left"
@@ -726,15 +686,17 @@ function handleSelect(key: string***REMOVED*** {
                             style="
                                 width: 180px;
                                 height: 38px;
-                                margin: 15px;
-                                align-self: center;
+                                margin-top: 20px;
+                                margin-left: 15px;
+                              ***REMOVED***
+                              ***REMOVED***
                                 text-align: center;
                                 font-family: -apple-system, BlinkMacSystemFont,
                                     'Segoe UI', Roboto, 'Helvetica Neue', Arial,
                                     sans-serif;
                                 font-weight: bold;
                                 font-size: 14px;
-                                border-radius: 15px;
+                                border-radius: 20px;
                             "
               ***REMOVED***
                             <template #icon>
@@ -744,11 +706,17 @@ function handleSelect(key: string***REMOVED*** {
                             ***REMOVED***
                             新建对话
                         </n-button>
+              ***REMOVED***class="icon-button">
+                            <n-icon size="17" class="icon">
+                      ***REMOVED***class="i-hugeicons:search-01"></div>
+                            </n-icon>
+            ***REMOVED***
                     </n-layout-header>
                     <n-layout-content class="content">
                         <n-data-table
                             class="custom-table"
                             style="
+                                font-size: 14px;
                                 --n-td-color-hover: #d5dcff;
                                 font-family: -apple-system, BlinkMacSystemFont,
                                     'Segoe UI', Roboto, 'Helvetica Neue', Arial,
@@ -774,8 +742,11 @@ function handleSelect(key: string***REMOVED*** {
                         </n-data-table>
                     </n-layout-content>
               ***REMOVED***
-                <footer class="footer" style="flex-shrink: 0">
-                    <n-divider style="width: 240px; padding: 10px" />
+                <n-layout-footer
+                    class="footer"
+                    style="flex-shrink: 0; height: 200"
+      ***REMOVED***
+                    <n-divider style="width: 260px" />
                     <n-button
                         quaternary
                         icon-placement="left"
@@ -785,7 +756,7 @@ function handleSelect(key: string***REMOVED*** {
                         style="
                             width: 200px;
                             height: 38px;
-                            margin-left: 15px;
+                            margin-left: 20px;
                           ***REMOVED***
                             align-self: center;
                             text-align: center;
@@ -807,18 +778,22 @@ function handleSelect(key: string***REMOVED*** {
                         :show="isModalOpen"
                         @update:show="handleModalClose"
           ***REMOVED***
-                </footer>
+                </n-layout-footer>
 ***REMOVED***
 
             <!-- 内容区域 -->
             <div
                 class="flex-1"
                 h-full
-                style="background: linear-gradient(to bottom, #8874f1, #588af9***REMOVED***"
+                style="
+                    background: linear-gradient(to bottom, #8874f1, #588af9***REMOVED***;
+                  ***REMOVED***
+                  ***REMOVED***
+                "
   ***REMOVED***
                 <div
                     flex="~ justify-between items-center"
-                    style="margin-top: 10px; margin-right: 10px"
+                    style="margin-top: 8px; margin-right: 5px"
       ***REMOVED***
                     <NavigationNavBar />
     ***REMOVED***
@@ -1110,6 +1085,7 @@ function handleSelect(key: string***REMOVED*** {
                             width: 70%;
                             margin-left: 11%;
                             margin-top: -20px;
+                            background-color: #f6f7fb;
                         "
           ***REMOVED***
                         <SuggestedView
@@ -1120,10 +1096,14 @@ function handleSelect(key: string***REMOVED*** {
     ***REMOVED***
 
                 <div
-                    style="display: flex; align-items: center"
-                    flex-basis="10%"
-                    p="60"
-                    py="5"
+                    style="
+                        align-items: center;
+                        background-color: #f6f7fb;
+                        margin-right: 5px;
+                        margin-bottom: 8px;
+                        border-bottom-right-radius: 10px;
+                        flex-shrink: 0;
+                    "
       ***REMOVED***
                     <div
                         style="
@@ -1138,7 +1118,7 @@ function handleSelect(key: string***REMOVED*** {
                                 style="
                                   ***REMOVED***
                                     gap: 10px;
-                                    margin-left: 5%;
+                                    margin-left: 10%;
                                     margin-bottom: 5px;
                                 "
                   ***REMOVED***
@@ -1353,8 +1333,8 @@ function handleSelect(key: string***REMOVED*** {
                                     '--n-padding-left': '60px',
                                     '--n-padding-right': '20px',
                                     '--n-padding-vertical': '15px',
-                                    width: '90%',
-                                    marginLeft: '5%',
+                                    width: '79%',
+                                    marginLeft: '10%',
                                     align: 'center'
                                 ***REMOVED***"
                                 :placeholder="placeholder"
@@ -1367,7 +1347,7 @@ function handleSelect(key: string***REMOVED*** {
                                 style="
                                     transform: translateY(-50%***REMOVED***;
                                     position: absolute;
-                                    margin-left: 6%;
+                                    margin-left: 11%;
                                     top: 62%;
                                 "
                   ***REMOVED***
@@ -1414,7 +1394,7 @@ function handleSelect(key: string***REMOVED*** {
                 ***REMOVED***
                             <n-float-button
                                 position="absolute"
-                                :right="75"
+                                :right="150"
                                 top="59%"
                                 :type="stylizingLoading ? 'primary' : 'default'"
                                 color
@@ -1450,7 +1430,7 @@ function handleSelect(key: string***REMOVED*** {
     ***REMOVED***; // 设置最大高度，确保输入框和导航栏有足够的空间
     padding-bottom: 20px; // 底部内边距，防止内容被遮挡
     background-color: #f6f7fb;
-  ***REMOVED***
+    margin-right: 5px;
     // background: linear-gradient(to bottom, #f0effe, #f6f7fb***REMOVED***;
 ***REMOVED***
 /* 滚动条整体部分 */
@@ -1513,8 +1493,7 @@ function handleSelect(key: string***REMOVED*** {
 ***REMOVED***
 
 .custom-layout {
-    border-top-left-radius: 20px;
-
+    border-top-left-radius: 10px;
     background-color: #ffffff;
 ***REMOVED***
 
@@ -1529,7 +1508,60 @@ function handleSelect(key: string***REMOVED*** {
     padding: 8px;
 ***REMOVED***
 .footer {
-    // margin-bottom: 5px;
-    border-bottom-left-radius: 20px;
+    border-bottom-left-radius: 10px;
+***REMOVED***
+
+:deep(.n-layout-scroll-container***REMOVED*** {
+    overflow: hidden;
+    /* 滚动条整体部分 */
+    &::-webkit-scrollbar {
+        width: 4px; /* 竖向滚动条宽度 */
+        height: 4px; /* 横向滚动条高度 */
+        opacity: 0; /* 初始时隐藏滚动条 */
+        transition: opacity 0.3s; /* 添加过渡效果 */
+    ***REMOVED***
+
+    /* 滚动条的轨道 */
+    &::-webkit-scrollbar-track {
+        background: #ffffff !important; /* 轨道背景色 */
+    ***REMOVED***
+
+    /* 滚动条的滑块 */
+    &::-webkit-scrollbar-thumb {
+        background: #cac9f9 !important; /* 滑块颜色 */
+      ***REMOVED*** /* 滑块圆角 */
+    ***REMOVED***
+
+    /* 鼠标悬停时显示滚动条 */
+    &:hover::-webkit-scrollbar {
+        opacity: 1; /* 显示滚动条 */
+    ***REMOVED***
+
+    /* 滚动条的滑块在悬停状态下的样式 */
+    &::-webkit-scrollbar-thumb:hover {
+        background: #cac9f9 !important; /* 悬停时滑块颜色 */
+    ***REMOVED***
+***REMOVED***
+
+.icon-button {
+  ***REMOVED***
+    align-items: center;
+    justify-content: center;
+    margin-top: 5px;
+    width: 38px; /* 可根据需要调整 */
+    height: 38px; /* 与宽度相同，形成圆形 */
+    border-radius: 100%; /* 圆形 */
+    border: 1px solid #e8eaf3;
+    background-color: #ffffff; /* 按钮背景颜色 */
+  ***REMOVED***
+    transition: background-color 0.3s; /* 平滑过渡效果 */
+    position: relative; /* 相对定位 */
+***REMOVED***
+.icon-button.selected {
+    border: 1px solid #a48ef4;
+***REMOVED***
+
+.icon-button:hover {
+    border: 1px solid #a48ef4; /* 鼠标悬停时的颜色 */
 ***REMOVED***
 ***REMOVED***
