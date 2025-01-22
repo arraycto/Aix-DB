@@ -1,3 +1,4 @@
+import base64
 import logging
 import os
 import traceback
@@ -26,8 +27,7 @@ def convert_img(image***REMOVED***:
     :return: 图片标签字典
     """
     with image.open(***REMOVED*** as image_bytes:
-    ***REMOVED***"src": ""***REMOVED***
-        # return {"src": "data:{0***REMOVED***;base64,{1***REMOVED***".format(image.content_type, base64.b64encode(image_bytes.read(***REMOVED******REMOVED***.decode(***REMOVED******REMOVED******REMOVED***
+    ***REMOVED***"src": "data:{0***REMOVED***;base64,{1***REMOVED***".format(image.content_type, base64.b64encode(image_bytes.read(***REMOVED******REMOVED***.decode(***REMOVED******REMOVED******REMOVED***
 
 
 async def convert_word_to_md(file_key***REMOVED***:
@@ -106,7 +106,7 @@ async def extract_toc_to_markdown(user_id, file_key***REMOVED***:
     # 转换word to pdf 并上传至minio
     file_key = PdfUtil(***REMOVED***.convert_document_to_pdf_from_minio(file_key***REMOVED***
     file_url = MinioUtils(***REMOVED***.get_file_url_by_key(object_key=file_key***REMOVED***
-    insert_markdown_to_db(user_id=user_id, file_key=file_key, file_url=file_url, markdown=md***REMOVED***
+    # insert_markdown_to_db(user_id=user_id, file_key=file_key, file_url=file_url, markdown=md***REMOVED***
 
     return md
 
@@ -114,39 +114,43 @@ async def extract_toc_to_markdown(user_id, file_key***REMOVED***:
 mysql_client = MysqlUtil(***REMOVED***
 
 
-def insert_markdown_to_db(user_id, file_key, file_url, markdown***REMOVED***:
+async def insert_demand_manager_to_db(user_id, doc_name, doc_desc, file_key***REMOVED*** -> bool:
     """
     将Markdown内容插入到数据库表t_test_assistant中。
     :param user_id
     :param file_key: 文件的MinIO key
-    :param file_url: 文件的URL
-    :param markdown: Markdown格式的文本
+    :param doc_name: 需求文档名称
+    :param doc_desc: 需求文档描述
     """
     try:
         # 插入数据
-        sql = "INSERT INTO t_test_assistant (user_id,file_key,file_url, markdown, create_time, update_time***REMOVED*** " "VALUES (%s,%s,%s, %s, %s, %s***REMOVED***"
+        sql = "INSERT INTO t_demand_manager (user_id,doc_name,doc_desc,file_key,create_time, update_time***REMOVED*** VALUES (%s,%s,%s, %s, %s, %s***REMOVED***"
         current_time = datetime.now(***REMOVED***
-        data = (user_id, file_key, file_url, markdown, current_time, current_time***REMOVED***
+        data = (user_id, doc_name, doc_desc, file_key, current_time, current_time***REMOVED***
 
         mysql_client.insert(sql, data***REMOVED***
+
+        return True
 
     except Exception as e:
         traceback.print_exception(e***REMOVED***
         logger.error(f"保存测试助手记录失败: {e***REMOVED***"***REMOVED***
+        return False
 
 
-async def query_test_assistant_records(file_key=None, page=1, limit=10***REMOVED***:
+async def query_demand_records(user_id, file_key=None, page=1, limit=10***REMOVED***:
     """
     根据文件key查询t_test_assistant表中的记录，并支持分页。
 
+    :param user_id
     :param file_key: 文件的MinIO key，用于过滤查询结果。如果为None，则不应用此过滤条件。
     :param page: 当前页码，默认为第一页。
     :param limit: 每页显示的记录数，默认为10条。
     :return: 包含分页信息和记录列表的字典。
     """
     # 构建SQL查询语句的基础部分
-    base_sql = "SELECT * FROM t_test_assistant"
-    where_clause = " WHERE 1=1 "
+    base_sql = "SELECT * FROM t_demand_manager"
+    where_clause = f" WHERE 1=1 and user_id={user_id***REMOVED*** "
     params = []
 
     # 如果提供了file_key，则添加到WHERE子句中
@@ -155,7 +159,7 @@ async def query_test_assistant_records(file_key=None, page=1, limit=10***REMOVED
         params.append(file_key***REMOVED***
 
     # 获取总记录数
-    count_sql = f"SELECT COUNT(1***REMOVED*** AS count FROM t_test_assistant{where_clause***REMOVED***"
+    count_sql = f"SELECT COUNT(1***REMOVED*** AS count FROM t_demand_manager{where_clause***REMOVED***"
     total_count = mysql_client.query_mysql_dict_params(count_sql, params***REMOVED***[0]["count"]
     total_pages = ceil(total_count / limit***REMOVED***  # 计算总页数
 
@@ -170,3 +174,13 @@ async def query_test_assistant_records(file_key=None, page=1, limit=10***REMOVED
     records = mysql_client.query_mysql_dict_params(fetch_sql, params***REMOVED***
 
 ***REMOVED***"records": records, "current_page": page, "total_pages": total_pages, "total_count": total_count***REMOVED***
+
+
+async def delete_demand_records(record_id***REMOVED***:
+    """
+    删除t_test_assistant表中的记录。
+    :param record_id: 要删除的记录的ID。
+    """
+    # 构建SQL删除语句
+    delete_sql = f"DELETE FROM t_demand_manager WHERE id={record_id***REMOVED***"
+    mysql_client.execute_mysql(delete_sql***REMOVED***

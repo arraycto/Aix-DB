@@ -159,6 +159,11 @@ export async function dify_suggested(chat_id***REMOVED*** {
     return fetch(req***REMOVED***
 ***REMOVED***
 
+/**
+ * word 转 md
+ * @param file_key
+ * @returns
+ */
 export async function word_to_md(file_key***REMOVED*** {
     const userStore = useUserStore(***REMOVED***
     const token = userStore.getUserToken(***REMOVED***
@@ -178,17 +183,15 @@ export async function word_to_md(file_key***REMOVED*** {
 ***REMOVED***
 
 /**
- * 查询测试助手记录
+ * 查询项目列表
  * @param page
  * @param limit
  * @returns
  */
-export async function query_test_assistant_records(page, limit***REMOVED*** {
+export async function query_demand_records(page, limit***REMOVED*** {
     const userStore = useUserStore(***REMOVED***
     const token = userStore.getUserToken(***REMOVED***
-    const url = new URL(
-  ***REMOVED***${location.origin***REMOVED***/sanic/ta/query_test_assistant_records`
-    ***REMOVED***
+    const url = new URL(`${location.origin***REMOVED***/sanic/ta/query_demand_records`***REMOVED***
     const req = new Request(url, {
         mode: 'cors',
         method: 'post',
@@ -199,6 +202,52 @@ export async function query_test_assistant_records(page, limit***REMOVED*** {
   ***REMOVED***
             page,
             limit
+        ***REMOVED******REMOVED***
+    ***REMOVED******REMOVED***
+    return fetch(req***REMOVED***
+***REMOVED***
+
+/**
+ * 保存项目信息
+ * @param project_data b
+ * @returns
+ */
+export async function insert_demand_manager(project_data***REMOVED*** {
+    const userStore = useUserStore(***REMOVED***
+    const token = userStore.getUserToken(***REMOVED***
+    const url = new URL(`${location.origin***REMOVED***/sanic/ta/insert_demand_manager`***REMOVED***
+    const req = new Request(url, {
+        mode: 'cors',
+        method: 'post',
+  ***REMOVED***
+    ***REMOVED***
+            Authorization: `Bearer ${token***REMOVED***` // 添加 token 到头部
+        ***REMOVED***,
+  ***REMOVED***
+            project_data
+        ***REMOVED******REMOVED***
+    ***REMOVED******REMOVED***
+    return fetch(req***REMOVED***
+***REMOVED***
+
+/**
+ * 删除项目信息
+ * @param id
+ * @returns
+ */
+export async function delete_demand_records(id***REMOVED*** {
+    const userStore = useUserStore(***REMOVED***
+    const token = userStore.getUserToken(***REMOVED***
+    const url = new URL(`${location.origin***REMOVED***/sanic/ta/delete_demand_records`***REMOVED***
+    const req = new Request(url, {
+        mode: 'cors',
+        method: 'post',
+  ***REMOVED***
+    ***REMOVED***
+            Authorization: `Bearer ${token***REMOVED***` // 添加 token 到头部
+        ***REMOVED***,
+  ***REMOVED***
+            id
         ***REMOVED******REMOVED***
     ***REMOVED******REMOVED***
     return fetch(req***REMOVED***
