@@ -267,8 +267,12 @@ def query_user_qa_record(chat_id):
     :return:
     """
     with pool.get_session() as session:
+        session: Session = session
         records = (
-            session.query(TUserQaRecord).filter(TUserQaRecord.chat_id == chat_id).order_by(TUserQaRecord.id.desc())
+            session.query(TUserQaRecord)
+            .filter(TUserQaRecord.chat_id == chat_id)
+            .order_by(TUserQaRecord.id.desc())
+            .all()
         )
         return model_to_dict(records)
     # sql = f"select * from t_user_qa_record where chat_id='{chat_id}' order by id desc limit 1"

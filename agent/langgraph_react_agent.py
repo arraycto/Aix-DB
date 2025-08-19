@@ -39,7 +39,7 @@ class LangGraphReactAgent:
             max_retries=int(os.getenv("MAX_RETRIES", 3)),
             streaming=os.getenv("STREAMING", "True").lower() == "true",
             # 将额外参数通过 extra_body 传递
-            extra_body={},
+            extra_body={"enable_thinking": True},
         )
 
         # 使用 os.path 构建路径
@@ -140,6 +140,7 @@ class LangGraphReactAgent:
                 config=config,
                 stream_mode="messages",
             ):
+                # print(message_chunk)
                 # 工具输出
                 if metadata["langgraph_node"] == "tools":
                     tool_name = message_chunk.name or "未知工具"
@@ -162,4 +163,6 @@ class LangGraphReactAgent:
         except Exception as e:
             print(f"[ERROR] Agent运行异常: {e}")
             traceback.print_exception(e)
-            await response.write(self._create_response("[ERROR] 智能体运行异常", "error", DataTypeEnum.ANSWER.value[0]))
+            await response.write(
+                self._create_response("[ERROR] 智能体运行异常:", "error", DataTypeEnum.ANSWER.value[0])
+            )

@@ -110,6 +110,7 @@ dependencies = [
     { name = "aiomysql" },
     { name = "beautifulsoup4" },
     { name = "bs4" },
+    { name = "dashscope" },
     { name = "duckdb" },
     { name = "langchain" },
     { name = "langchain-community" },
@@ -126,6 +127,7 @@ dependencies = [
     { name = "openai" },
     { name = "openpyxl" },
     { name = "pdfplumber" },
+    { name = "pydantic" },
     { name = "pyjwt" },
     { name = "pymupdf" },
     { name = "pymysql" },
@@ -147,6 +149,7 @@ requires-dist = [
     { name = "aiomysql", specifier = ">=0.2.0,<0.3.0" },
     { name = "beautifulsoup4", specifier = ">=4.13.3,<5.0.0" },
     { name = "bs4", specifier = ">=0.0.2,<0.1.0" },
+    { name = "dashscope", specifier = ">=1.24.1" },
     { name = "duckdb", specifier = ">=1.0.0,<2.0.0" },
     { name = "langchain", specifier = ">=0.3.27" },
     { name = "langchain-community", specifier = ">=0.3.27" },
@@ -163,6 +166,7 @@ requires-dist = [
     { name = "openai", specifier = ">=1.97.0" },
     { name = "openpyxl", specifier = ">=3.1.5,<4.0.0" },
     { name = "pdfplumber", specifier = ">=0.11.3,<0.12.0" },
+    { name = "pydantic", specifier = ">=2.11.7" },
     { name = "pyjwt", specifier = ">=2.9.0,<3.0.0" },
     { name = "pymupdf", specifier = ">=1.25.2,<2.0.0" },
     { name = "pymysql", specifier = ">=1.1.1" },
@@ -412,6 +416,20 @@ source = { registry = "https://mirrors.aliyun.com/pypi/simple" }
 sdist = { url = "https://mirrors.aliyun.com/pypi/packages/a9/95/a3dbbb5028f35eafb79008e7522a75244477d2838f38cbb722248dabc2a8/cycler-0.12.1.tar.gz", hash = "sha256:88bb128f02ba341da8ef447245a9e138fae777f6a23943da4540077d3601eb1c" }
 wheels = [
     { url = "https://mirrors.aliyun.com/pypi/packages/e7/05/c19819d5e3d95294a6f5947fb9b9629efb316b96de511b418c53d245aae6/cycler-0.12.1-py3-none-any.whl", hash = "sha256:85cef7cff222d8644161529808465972e51340599459b8ac3ccbac5a854e0d30" },
+]
+
+[[package]]
+name = "dashscope"
+version = "1.24.1"
+source = { registry = "https://mirrors.aliyun.com/pypi/simple" }
+dependencies = [
+    { name = "aiohttp" },
+    { name = "cryptography" },
+    { name = "requests" },
+    { name = "websocket-client" },
+]
+wheels = [
+    { url = "https://mirrors.aliyun.com/pypi/packages/1a/5e/58eb42ba9d23dbb2bb37032b4991fcdf5b0e42fcb624c3f095b253f490d3/dashscope-1.24.1-py3-none-any.whl", hash = "sha256:509241ef8c173e94da58ec4b94d4aacad3a151dc93ead6e5ea12acd27615b127" },
 ]
 
 [[package]]
@@ -1954,6 +1972,15 @@ wheels = [
     { url = "https://mirrors.aliyun.com/pypi/packages/8a/ca/0864176a649838b838f36d44bf31c451597ab363b60dc9e09c9630619d41/uvloop-0.21.0-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:8a375441696e2eda1c43c44ccb66e04d61ceeffcd76e4929e527b7fa401b90fb" },
     { url = "https://mirrors.aliyun.com/pypi/packages/30/bf/08ad29979a936d63787ba47a540de2132169f140d54aa25bc8c3df3e67f4/uvloop-0.21.0-cp311-cp311-musllinux_1_2_aarch64.whl", hash = "sha256:baa0e6291d91649c6ba4ed4b2f982f9fa165b5bbd50a9e203c416a2797bab3c6" },
     { url = "https://mirrors.aliyun.com/pypi/packages/da/e2/5cf6ef37e3daf2f06e651aae5ea108ad30df3cb269102678b61ebf1fdf42/uvloop-0.21.0-cp311-cp311-musllinux_1_2_x86_64.whl", hash = "sha256:4509360fcc4c3bd2c70d87573ad472de40c13387f5fda8cb58350a1d7475e58d" },
+]
+
+[[package]]
+name = "websocket-client"
+version = "1.8.0"
+source = { registry = "https://mirrors.aliyun.com/pypi/simple" }
+sdist = { url = "https://mirrors.aliyun.com/pypi/packages/e6/30/fba0d96b4b5fbf5948ed3f4681f7da2f9f64512e1d303f94b4cc174c24a5/websocket_client-1.8.0.tar.gz", hash = "sha256:3239df9f44da632f96012472805d40a23281a991027ce11d2f45a6f24ac4c3da" }
+wheels = [
+    { url = "https://mirrors.aliyun.com/pypi/packages/5a/84/44687a29792a70e111c5c477230a72c4b957d88d16141199bf9acb7537a3/websocket_client-1.8.0-py3-none-any.whl", hash = "sha256:17b44cc997f5c498e809b22cdf2d9c7a9e71c02c8cc2b6c56e7c2d1239bfa526" },
 ]
 
 [[package]]
