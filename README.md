@@ -26,7 +26,21 @@ ECharts 📈
 - **应用架构**：作为一个轻量级全链路一站式大模型应用开发框架方便扩展落地
 - **灵活部署**：支持大模型应用开发各依赖组件docker-compose一键拉起快速部署零配置
 
-## 运行效果
+## 案例展示
+
+<table>
+<tbody>
+<tr>
+<td><img src="./docs/docs/images/chat-05.png" alt="" style="width:400px;max-height:640px; min-height: 200px"></td>
+<td><img src="./docs/docs/images/chat-06.png" alt="" style="width:400px;max-height:640px; min-height: 200px"></td>
+</tr>
+<tr>
+<td><img src="./docs/docs/images/chat-07.png" alt="" style="width:400px;max-height:640px; min-height: 200px"></td>
+<td><img src="./docs/docs/images/chat-08.png" alt="" style="width:400px;max-height:640px; min-height: 200px"></td>
+</tr>
+</tbody>
+</table>
+
 <table>
 <tbody>
 <tr>
