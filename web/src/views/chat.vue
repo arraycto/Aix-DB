@@ -1175,7 +1175,6 @@ const backgroundColorVariable = ref('#ffffff')
                   ref="refInputTextString"
                   v-model:value="inputTextString"
                   type="textarea"
-                  h-60
                   class="textarea-resize-none text-15"
                   :style="{
                     '--n-border-radius': '15px',
@@ -1185,11 +1184,14 @@ const backgroundColorVariable = ref('#ffffff')
                     'width': '80%',
                     'marginLeft': '10%',
                     'align': 'center',
+                    'font-family': `-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji'`,
+                    'font-size': '16px',
+                    'line-height': '1.5'
                   }"
                   :placeholder="placeholder"
                   :autosize="{
                     minRows: 1,
-                    maxRows: 5,
+                    maxRows: 10,
                   }"
                 />
                 <div
