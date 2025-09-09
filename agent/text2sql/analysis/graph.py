@@ -32,12 +32,13 @@ def create_graph():
     :return:
     """
     graph = StateGraph(AgentState)
+    db_service = DatabaseService()
 
-    graph.add_node("schema_inspector", DatabaseService.get_table_schema)
+    graph.add_node("schema_inspector", db_service.get_table_schema)
     # graph.add_node("llm_reasoning", create_reasoning_steps)
     graph.add_node("table_relationship", get_table_relationship)
     graph.add_node("sql_generator", sql_generate)
-    graph.add_node("sql_executor", DatabaseService.execute_sql)
+    graph.add_node("sql_executor", db_service.execute_sql)
     graph.add_node("data_render", data_render_ant)
     graph.add_node("data_render_apache", data_render_apache)
     graph.add_node("summarize", summarize)

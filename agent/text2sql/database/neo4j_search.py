@@ -3,16 +3,33 @@
 """
 
 import logging
+import os
+
 from py2neo import Graph
 
 from agent.text2sql.state.agent_state import AgentState
 
 # Neo4j 配置
-NEO4J_URI = "bolt://localhost:7687"
-NEO4J_USER = "neo4j"
-NEO4J_PASSWORD = "12345678"
+NEO4J_URI = os.getenv("NEO4J_URI", "bolt://localhost:7687")
+NEO4J_USER = os.getenv("NEO4J_USER", "neo4j")
+NEO4J_PASSWORD = os.getenv("NEO4J_PASSWORD", "12345678")
 
 logger = logging.getLogger(__name__)
+
+
+"""
+# 查询任意表之间的关系数据
+MATCH (t1:Table)-[r:REFERENCES]-(t2:Table)
+WHERE t1.name IN ["t_customers","t_products", "t_sales_orders", "t_order_details"]
+  AND t2.name IN ["t_customers","t_products", "t_sales_orders", "t_order_details"]
+  AND t1.name < t2.name
+
+RETURN 
+  t1.name AS from_table,
+  r.field_relation AS relationship,
+  t2.name AS to_table
+
+"""
 
 
 def get_table_relationship(state: AgentState):

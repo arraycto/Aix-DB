@@ -849,7 +849,7 @@ const backgroundColorVariable = ref('#ffffff')
             style="flex-shrink: 0"
           >
             <n-divider
-              style="width: calc(100% - 50px); margin-left: 25px; margin-right: 25px;
+              style="width: calc(100% - 60px); margin-left: 25px; margin-right: 35px;
 
 --n-color: #e8eaf2;"
             />
