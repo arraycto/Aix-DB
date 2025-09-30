@@ -205,7 +205,7 @@ async def add_user_record(
             t02_answer_str,
             json.dumps(to4_answer, ensure_ascii=False),
             qa_type,
-            json.dumps(file_list, ensure_ascii=False) if len(file_list) > 0 else "",
+            json.dumps(file_list, ensure_ascii=False) if file_list and len(file_list) > 0 else "",
         ]
 
         # 如果 mysql_client.insert 是异步方法
