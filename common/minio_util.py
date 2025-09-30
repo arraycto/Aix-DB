@@ -195,7 +195,7 @@ class MinioUtils:
                 content.seek(0)
                 full_text = self.read_pdf_text_from_bytes(content.getvalue())
             elif mime_type == "application/pdf":
-                # todo 如果pdf文件中包含图片，则需要使用OCR处理图片 私有化部署mineru支持
+                # todo 如果pdf文件中包含图片，则需要使用OCR处理图片 私有化部署minerU支持
                 content.seek(0)
                 full_text = self.read_pdf_text_from_bytes(content.getvalue())
             else:
@@ -347,3 +347,45 @@ class MinioUtils:
         except Exception as e:
             logger.error(f"读取文本时出错: {e}")
             raise MyException(SysCode.c_9999, "PDF 解析失败") from e
+
+    def get_files_content_as_markdown(self, file_info_list: list, bucket_name: str = "filedata") -> str:
+        """
+        根据文件信息列表获取文件内容并拼接成Markdown格式
+
+        参数:
+        - file_info_list: 文件信息列表，格式如 [{"source_file_key": "销售数据.xlsx", "parse_file_key": "销售数据.xlsx.txt", "file_size": "11.0KB"}]
+        - bucket_name: 存储桶名称
+
+        返回:
+        - 拼接后的Markdown格式文本
+        """
+        result_parts = []
+
+        for file_info in file_info_list:
+            source_file_key = file_info.get("source_file_key")
+            parse_file_key = file_info.get("parse_file_key")
+
+            if not parse_file_key:
+                continue
+
+            try:
+                # 获取文件内容
+                response = self.client.get_object(bucket_name, parse_file_key)
+                content = response.data.decode("utf-8")
+                response.close()
+                response.release_conn()
+
+                # 获取文件扩展名
+                _, ext = os.path.splitext(source_file_key or parse_file_key)
+
+                # 构建Markdown格式文本
+                file_part = f"- 文件名称: {source_file_key}\n- 文件格式: {ext}\n- 文件内容: {content}"
+                result_parts.append(file_part)
+
+            except Exception as e:
+                logger.error(f"读取文件 {parse_file_key} 内容时出错: {e}")
+                # 即使某个文件读取出错也继续处理其他文件
+                continue
+
+        # 使用分隔线连接各部分
+        return "\n----------\n".join(result_parts) if result_parts else ""

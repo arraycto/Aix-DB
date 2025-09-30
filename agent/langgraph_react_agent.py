@@ -12,10 +12,13 @@ from langchain_openai import ChatOpenAI
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.prebuilt import create_react_agent
 
+from common.minio_util import MinioUtils
 from constants.code_enum import DataTypeEnum, DiFyAppEnum
 from services.user_service import add_user_record, decode_jwt_token
 
 logger = logging.getLogger(__name__)
+
+minio_utils = MinioUtils()
 
 
 class LangGraphReactAgent:
@@ -136,9 +139,9 @@ class LangGraphReactAgent:
         :param user_token:
         :return:
         """
-
+        file_as_markdown = ""
         if file_list:
-            await response.write(self._create_response("\n> ✅正在阅读文档..."))
+            file_as_markdown = minio_utils.get_files_content_as_markdown(file_list)
 
         # 获取用户信息 标识对话状态
         user_dict = await decode_jwt_token(user_token)
@@ -264,8 +267,13 @@ class LangGraphReactAgent:
                 pre_model_hook=self.short_trim_messages,
             )
 
+            # 如果有文件内容，则将其添加到查询中
+            formatted_query = query
+            if file_as_markdown:
+                formatted_query = f"{query}\n\n参考资料内容如下：\n{file_as_markdown}"
+
             async for message_chunk, metadata in agent.astream(
-                input={"messages": [HumanMessage(content=query)]},
+                input={"messages": [HumanMessage(content=formatted_query)]},
                 config=config,
                 stream_mode="messages",
             ):

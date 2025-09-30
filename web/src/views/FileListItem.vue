@@ -52,7 +52,7 @@ const iconClass = computed(() => getFileIconClass(props.file.source_file_key))
     class="relative w-180 px-16 py-5 b b-solid b-bgcolor rounded-8 transition-all-300 bg-white h-45"
     flex="~ gap-5 items-center"
   >
-    <div class="size-30">
+    <div class="size-30 ml--8">
       <div
         :class="[
           iconClass,

@@ -1293,6 +1293,29 @@ const pendingUploadFileInfoList = ref([])
                         <div flex="~ items-center justify-center" class="rounded-50% p-7 hover:bg-primary/5 transition-all-300 bg-primary/1" b="~ solid primary/20">
                           <div class="text-20  i-uil:upload cursor-pointer"></div>
                         </div>
+                        <!-- <n-icon size="30">
+                          <svg
+                            t="1729566080604"
+                            class="icon"
+                            viewBox="0 0 1024 1024"
+                            version="1.1"
+                            xmlns="http://www.w3.org/2000/svg"
+                            p-id="38910"
+                            width="64"
+                            height="64"
+                          >
+                            <path
+                              d="M856.448 606.72v191.744a31.552 31.552 0 0 1-31.488 31.488H194.624a31.552 31.552 0 0 1-31.488-31.488V606.72a31.488 31.488 0 1 1 62.976 0v160.256h567.36V606.72a31.488 31.488 0 1 1 62.976 0zM359.872 381.248c-8.192 0-10.56-5.184-5.376-11.392L500.48 193.152a11.776 11.776 0 0 1 18.752 0l145.856 176.704c5.184 6.272 2.752 11.392-5.376 11.392H359.872z"
+                              fill="#838384"
+                              p-id="38911"
+                            />
+                            <path
+                              d="M540.288 637.248a30.464 30.464 0 1 1-61.056 0V342.656a30.464 30.464 0 1 1 61.056 0v294.592z"
+                              fill="#838384"
+                              p-id="38912"
+                            />
+                          </svg>
+                        </n-icon> -->
                       </n-dropdown>
                     </template>
                   </n-input>
