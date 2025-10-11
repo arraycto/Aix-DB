@@ -3,9 +3,10 @@ services:
     image: crpi-7xkxsdc0iki61l0q.cn-hangzhou.personal.cr.aliyuncs.com/apconw/chat-vue3-mvp:1.1.9
     container_name: chat-vue3-mvp
     environment:
-      - TZ=Asia/Shanghai
+      DOCKER_HOST_INTERNAL: ${DOCKER_HOST_INTERNAL:-}
+      TZ: Asia/Shanghai
     volumes:
-      - ./nginx.conf:/etc/nginx/conf.d/nginx.conf
+      - ./nginx.conf.template:/etc/nginx/conf.d/nginx.conf.template
     ports:
       - "8081:80"
     extra_hosts:
