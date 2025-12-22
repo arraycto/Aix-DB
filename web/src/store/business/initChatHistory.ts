@@ -97,15 +97,22 @@ export const fetchConversationHistory = async function fetchConversationHistory(
   currentRenderIndex: Ref<number>,
   row,
   searchText: string,
+  page = 1,
+  limit = 20,
+  append = false,
 ) {
   try {
-    // // 初始化对话历史记录
-    // isInit.value = true
+    // 清空现有的 conversationItems（仅在重新加载当前对话时）
+    if (!append && row?.chat_id) {
+      conversationItems.value = []
+    }
 
-    // 清空现有的 conversationItems
-    conversationItems.value = []
-
-    const res = await GlobalAPI.query_user_qa_record(1, 999999, searchText, row?.chat_id)
+    const res = await GlobalAPI.query_user_qa_record(
+      page,
+      limit,
+      searchText,
+      row?.chat_id,
+    )
     if (res.status === 401) {
       userStore.logout()
       setTimeout(() => {
@@ -117,13 +124,23 @@ export const fetchConversationHistory = async function fetchConversationHistory(
         const records = data.data.records
 
         // 初始化左右对话侧列表数据
-        if (isInit.value) {
-          tableData.value = records.map((chat: any, index: number) => ({
+        if (isInit.value || !row?.chat_id) {
+          const nextTableRows = records.map((chat: any) => ({
             uuid: chat.uuid,
             key: chat.question.trim(),
             chat_id: chat.chat_id,
             qa_type: chat.qa_type,
           }))
+
+          if (append) {
+            const exists = new Set(tableData.value.map((item) => item.chat_id))
+            const filtered = nextTableRows.filter(
+              (item) => !exists.has(item.chat_id),
+            )
+            tableData.value = [...tableData.value, ...filtered]
+          } else {
+            tableData.value = nextTableRows
+          }
         }
 
         const itemsToAdd: any[] = []
@@ -197,7 +214,7 @@ export const fetchConversationHistory = async function fetchConversationHistory(
             }
           })
 
-          if (streamDataArray.length > 0) {
+          if (streamDataArray.length > 0 && row?.chat_id) {
             const stream = createStreamFromValue(streamDataArray) // 创建新的流
             const { error, reader } = processSingleResponse({
               status: 200, // 假设状态码总是 200
@@ -227,11 +244,22 @@ export const fetchConversationHistory = async function fetchConversationHistory(
           }
         }
 
-        conversationItems.value = itemsToAdd
-        // 这里删除对话后需要重置当前渲染索引
-        // currentRenderIndex.value = conversationItems.value.length - 1
-        // console.log(conversationItems.value)
-        currentRenderIndex.value = 0
+        // 只有在查看具体对话时才更新右侧内容
+        if (row?.chat_id) {
+          conversationItems.value = append
+            ? [...conversationItems.value, ...itemsToAdd]
+            : itemsToAdd
+          // 这里删除对话后需要重置当前渲染索引
+          currentRenderIndex.value = append
+            ? conversationItems.value.length - 1
+            : 0
+        }
+
+        return {
+          currentPage: data.data?.current_page ?? page,
+          totalPages: data.data?.total_pages ?? 1,
+          totalCount: data.data?.total_count ?? records.length,
+        }
       }
     } else {
       console.log('Request failed with status:', res.status)

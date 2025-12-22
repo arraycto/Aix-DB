@@ -20,7 +20,7 @@ const showDefaultPage = ref(true)
 const businessStore = useBusinessStore()
 
 // 是否是刚登录到系统 批量渲染对话记录
-const isInit = ref(false)
+const isInit = ref(true)
 
 // 是否查看历史消息标识
 const isView = ref(false)
@@ -28,22 +28,13 @@ const isView = ref(false)
 // 使用 onMounted 生命周期钩子加载历史对话
 // 新增：加载历史对话的状态
 const isLoadingHistory = ref(false)
-
-// 使用 onMounted 生命周期钩子加载历史对话
-onBeforeMount(() => {
-  try {
-    // 开始加载历史对话
-    isLoadingHistory.value = true
-    isInit.value = true
-    fetchConversationHistory(isInit, conversationItems, tableData, currentRenderIndex, null, '')
-  } catch (error) {
-    console.error('加载历史对话失败:', error)
-    window.$ModalMessage.error('加载历史对话失败，请重试')
-  } finally {
-    // 加载完成
-    isLoadingHistory.value = false
-  }
-})
+const isLoadingMoreHistory = ref(false)
+const historyPage = ref(1)
+const historyTotalPages = ref(1)
+const historyPageSize = 20
+const hasMoreHistory = computed(
+  () => historyPage.value <= historyTotalPages.value,
+)
 
 // 管理对话
 const isModalOpen = ref(false)
@@ -55,14 +46,7 @@ function handleModalClose(value) {
   isModalOpen.value = value
   isInit.value = true
   // 重新加载对话记录
-  fetchConversationHistory(
-    isInit,
-    conversationItems,
-    tableData,
-    currentRenderIndex,
-    null,
-    '',
-  )
+  loadHistoryList({ reset: true })
   showDefaultPage.value = true
 }
 
@@ -210,6 +194,7 @@ interface TableItem {
 }
 const tableData = ref<TableItem[]>([])
 const tableRef = ref(null)
+const historyScrollRef = useTemplateRef('historyScrollRef')
 
 // 保存对话历史记录
 const conversationItems = ref<
@@ -285,7 +270,14 @@ const checkAllFilesUploaded = () => {
 
 
 // 提交对话
-const handleCreateStylized = async (send_text = '', file_key = []) => {
+const handleCreateStylized = async (
+  send_text = '',
+  file_key: {
+    source_file_key: string
+    parse_file_key: string
+    file_size: string
+  }[] = [],
+) => {
   // if (qa_type.value === 'REPORT_QA') {
   //   window.$ModalMessage.warning('深度搜索功能暂不支持，功能正在开发中..')
   //   inputTextString.value = ''
@@ -584,13 +576,16 @@ const rowProps = (row: any) => {
       isView.value = true
 
       // 这里根据chat_id 过滤同一轮对话数据
-      fetchConversationHistory(
+      await fetchConversationHistory(
         isInit,
         conversationItems,
         tableData,
         currentRenderIndex,
         row,
         '',
+        1,
+        999999,
+        false,
       )
 
       // 关闭默认页面
@@ -734,24 +729,81 @@ const onBlurSearchChat = () => {
   isFocusSearchChat.value = false
 }
 
+// 加载对话历史（支持滚动分页）
+async function loadHistoryList(
+  options: { reset?: boolean; search?: string } = {},
+) {
+  const { reset = false, search = searchText.value } = options
+  if (isLoadingHistory.value || isLoadingMoreHistory.value) {
+    return
+  }
+  if (reset) {
+    historyPage.value = 1
+    historyTotalPages.value = 1
+    tableData.value = []
+  }
+
+  const pageToLoad = historyPage.value
+  const append = pageToLoad > 1
+  if (append) {
+    isLoadingMoreHistory.value = true
+  } else {
+    isLoadingHistory.value = true
+  }
+
+  try {
+    const meta = await fetchConversationHistory(
+      isInit,
+      conversationItems,
+      tableData,
+      currentRenderIndex,
+      null,
+      search,
+      pageToLoad,
+      historyPageSize,
+      append,
+    )
+    if (meta) {
+      historyTotalPages.value = meta.totalPages
+      historyPage.value = meta.currentPage + 1
+    }
+  } catch (error) {
+    console.error('加载历史对话失败:', error)
+    window.$ModalMessage.error('加载历史对话失败，请重试')
+  } finally {
+    isLoadingHistory.value = false
+    isLoadingMoreHistory.value = false
+  }
+}
+
 // 在script部分添加搜索处理函数
 const handleSearch = () => {
-  tableData.value = []
-  fetchConversationHistory(
-    isInit,
-    conversationItems,
-    tableData,
-    currentRenderIndex,
-    null,
-    searchText.value,
-  )
+  loadHistoryList({ reset: true })
 }
 
 const handleClear = () => {
   if (!showDefaultPage.value) {
     newChat()
   }
+  loadHistoryList({ reset: true })
 }
+
+// 对话历史滚动加载
+const handleHistoryScroll = () => {
+  const el = historyScrollRef.value as unknown as HTMLElement
+  if (!el || !hasMoreHistory.value || isLoadingMoreHistory.value) {
+    return
+  }
+  const isNearBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 10
+  if (isNearBottom) {
+    loadHistoryList()
+  }
+}
+
+// 首次进入加载历史列表
+onBeforeMount(() => {
+  loadHistoryList({ reset: true })
+})
 
 const collapsed = useLocalStorage(
   'collapsed-chat-menu',
@@ -899,6 +951,8 @@ const pendingUploadFileInfoList = ref([])
           <div
             flex="1 ~ col"
             class="scrollable-table-container"
+            ref="historyScrollRef"
+            @scroll.passive="handleHistoryScroll"
           >
             <n-data-table
               ref="tableRef"

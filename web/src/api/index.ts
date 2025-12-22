@@ -314,3 +314,5 @@ export async function stop_chat(task_id, qa_type) {
   })
   return fetch(req)
 }
+
+// 数据源相关 API 请使用 `./datasource` 模块

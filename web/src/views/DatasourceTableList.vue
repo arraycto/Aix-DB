@@ -3,6 +3,7 @@ import { NButton, NIcon, NInput, NLayout, NLayoutContent, NLayoutSider, NMessage
 import { computed, nextTick, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import TableRelationship from './TableRelationship.vue'
+import { fetch_datasource_field_list, fetch_datasource_preview_data, fetch_datasource_table_list, save_datasource_field, save_datasource_table } from '@/api/datasource'
 
 const router = useRouter()
 const route = useRoute()
@@ -43,10 +44,7 @@ const tableListWithSearch = computed(() => {
 const fetchTableList = async () => {
   initLoading.value = true
   try {
-    const url = new URL(`${location.origin}/sanic/datasource/tableList/${dsId.value}`)
-    const response = await fetch(url, {
-      method: 'POST',
-    })
+    const response = await fetch_datasource_table_list(dsId.value)
 
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`)
@@ -78,10 +76,7 @@ const clickTable = async (table: any) => {
 
   try {
     // 获取字段列表
-    const url = new URL(`${location.origin}/sanic/datasource/fieldList/${table.id}`)
-    const response = await fetch(url, {
-      method: 'POST',
-    })
+    const response = await fetch_datasource_field_list(table.id)
 
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`)
@@ -112,14 +107,7 @@ const fetchPreviewData = async () => {
       fields: fieldList.value,
     }
 
-    const url = new URL(`${location.origin}/sanic/datasource/previewData/${dsId.value}`)
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(buildData),
-    })
+    const response = await fetch_datasource_preview_data(dsId.value, buildData)
 
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`)
@@ -143,16 +131,9 @@ const editTable = () => {
 // 保存表注释
 const saveTable = async () => {
   try {
-    const url = new URL(`${location.origin}/sanic/datasource/saveTable`)
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        ...currentTable.value,
-        custom_comment: tableComment.value,
-      }),
+    const response = await save_datasource_table({
+      ...currentTable.value,
+      custom_comment: tableComment.value,
     })
 
     if (!response.ok) {
@@ -183,16 +164,9 @@ const editField = (row: any) => {
 // 保存字段注释
 const saveField = async () => {
   try {
-    const url = new URL(`${location.origin}/sanic/datasource/saveField`)
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        ...currentField.value,
-        custom_comment: fieldComment.value,
-      }),
+    const response = await save_datasource_field({
+      ...currentField.value,
+      custom_comment: fieldComment.value,
     })
 
     if (!response.ok) {
@@ -219,14 +193,7 @@ const saveField = async () => {
 // 切换字段状态
 const changeStatus = async (row: any) => {
   try {
-    const url = new URL(`${location.origin}/sanic/datasource/saveField`)
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(row),
-    })
+    const response = await save_datasource_field(row)
 
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`)

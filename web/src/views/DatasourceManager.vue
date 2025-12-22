@@ -3,6 +3,7 @@ import { useDialog } from 'naive-ui'
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import DatasourceForm from '@/components/Datasource/DatasourceForm.vue'
+import { delete_datasource, fetch_datasource_detail, fetch_datasource_list } from '@/api/datasource'
 
 const dialog = useDialog()
 const router = useRouter()
@@ -17,15 +18,7 @@ const currentDatasource = ref<any>(null)
 const fetchDatasourceList = async () => {
   loading.value = true
   try {
-    const url = new URL(`${location.origin}/sanic/datasource/list`)
-    const userStore = useUserStore()
-    const token = userStore.getUserToken()
-    const response = await fetch(url, {
-      method: 'GET',
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    })
+    const response = await fetch_datasource_list()
 
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`)
@@ -65,10 +58,7 @@ const handleAdd = () => {
 const handleEdit = async (item: any) => {
   try {
     // 获取完整的数据源信息
-    const url = new URL(`${location.origin}/sanic/datasource/get/${item.id}`)
-    const response = await fetch(url, {
-      method: 'POST',
-    })
+    const response = await fetch_datasource_detail(item.id)
 
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`)
@@ -96,10 +86,7 @@ const handleDelete = (item: any) => {
     negativeText: '取消',
     onPositiveClick: async () => {
       try {
-        const url = new URL(`${location.origin}/sanic/datasource/delete/${item.id}`)
-        const response = await fetch(url, {
-          method: 'POST',
-        })
+        const response = await delete_datasource(item.id)
 
         if (!response.ok) {
           throw new Error(`HTTP error! status: ${response.status}`)
