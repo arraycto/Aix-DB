@@ -200,7 +200,7 @@ class DatasourceConfigUtil:
     """数据源配置工具类 - 加密/解密"""
 
     # 简单的加密密钥（生产环境应使用更安全的方式）
-    KEY = b"SQLBot1234567890"  # 16字节密钥
+    KEY = b"AixDB12345678901"  # 16字节密钥
 
     @staticmethod
     def encrypt_config(config: Dict[str, Any]) -> str:

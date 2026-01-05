@@ -16,6 +16,7 @@ from constants.dify_rest_api import DiFyRestApi
 from model.db_connection_pool import get_db_pool
 from model.db_models import TUserQaRecord, TUser
 from model.serializers import model_to_dict
+from model.schemas import PaginatedResponse
 
 logger = logging.getLogger(__name__)
 
@@ -42,7 +43,7 @@ def execute_sql_dict(sql: str, params: tuple = None) -> List[dict]:
             result = session.execute(text(sql))
         rows = result.fetchall()
         columns = result.keys()
-        
+
         result_list = []
         for row in rows:
             row_dict = {}
@@ -296,12 +297,12 @@ async def delete_user_record(user_id, record_ids):
     execute_sql_update(sql=sql, params=params)
 
 
-async def query_user_record(user_id, page, limit, search_text, chat_id):
+async def query_user_record(user_id, page, size, search_text, chat_id):
     """
     根据用户id查询用户问答记录
     如果chat_id不为空，则查询该chat_id的所有记录；否则根据chat_id去重，取id最小的那条
     :param page
-    :param limit
+    :param size
     :param user_id
     :param search_text
     :param chat_id
@@ -317,7 +318,7 @@ async def query_user_record(user_id, page, limit, search_text, chat_id):
         conditions.append(f"user_id = {user_id}")
 
     # 计算偏移量
-    offset = (page - 1) * limit
+    offset = (page - 1) * size
 
     # 如果chat_id不为空，则不需要去重，直接查询
     if chat_id:
@@ -326,12 +327,12 @@ async def query_user_record(user_id, page, limit, search_text, chat_id):
             count_sql += " WHERE " + " AND ".join(conditions)
         total_count_result = execute_sql_dict(count_sql)
         total_count = total_count_result[0]["count"] if total_count_result else 0
-        total_pages = (total_count + limit - 1) // limit
+        total_pages = (total_count + size - 1) // size
 
         records_sql = f"SELECT * FROM t_user_qa_record"
         if conditions:
             records_sql += " WHERE " + " AND ".join(conditions)
-        records_sql += f" ORDER BY id ASC LIMIT {limit} OFFSET {offset}"
+        records_sql += f" ORDER BY id ASC LIMIT {size} OFFSET {offset}"
         records = execute_sql_dict(records_sql)
     else:
         # 如果chat_id为空，则需要去重，根据chat_id取id最小的记录
@@ -349,7 +350,7 @@ async def query_user_record(user_id, page, limit, search_text, chat_id):
         """
         total_count_result = execute_sql_dict(count_sql)
         total_count = total_count_result[0]["count"] if total_count_result else 0
-        total_pages = (total_count + limit - 1) // limit
+        total_pages = (total_count + size - 1) // size
 
         # 查询去重后的记录，根据chat_id分组并取id最小的记录
         records_sql = f"""
@@ -361,11 +362,16 @@ async def query_user_record(user_id, page, limit, search_text, chat_id):
                 GROUP BY chat_id
             ) tm ON t.chat_id = tm.chat_id AND t.id = tm.min_id
             ORDER BY t.id DESC 
-            LIMIT {limit} OFFSET {offset}
+            LIMIT {size} OFFSET {offset}
         """
         records = execute_sql_dict(records_sql)
 
-    return {"records": records, "current_page": page, "total_pages": total_pages, "total_count": total_count}
+    return PaginatedResponse(
+        records=records,
+        current_page=page,
+        total_count=total_count,
+        total_pages=total_pages,
+    )
 
 
 def query_user_qa_record(chat_id):

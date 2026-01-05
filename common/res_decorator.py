@@ -5,6 +5,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from functools import wraps
 
+from pydantic import BaseModel
 from sanic import response
 
 from common.exception import MyException
@@ -31,6 +32,9 @@ class CustomJSONEncoder(json.JSONEncoder):
         elif isinstance(obj, datetime):
             # 处理 datetime 类型
             return obj.strftime("%Y-%m-%d %H:%M:%S")
+        elif isinstance(obj, BaseModel):
+            # 处理 Pydantic 模型
+            return obj.model_dump()
         return super().default(obj)
 
 

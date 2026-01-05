@@ -1,6 +1,6 @@
 import logging
 
-from sanic import Blueprint, request
+from sanic import Blueprint, Request
 from sanic_ext import openapi
 
 from services.db_qadata_process import select_report_by_title
@@ -8,6 +8,13 @@ from services.text2_sql_service import exe_sql_query
 from common.exception import MyException
 from constants.code_enum import SysCodeEnum
 from common.res_decorator import async_json_resp
+from common.param_parser import parse_params
+from model.schemas import (
+    ProcessLlmOutRequest,
+    ProcessLlmOutResponse,
+    QueryGuidedReportResponse,
+    get_schema,
+)
 
 bp = Blueprint("text2sql", url_prefix="/llm")
 
@@ -19,13 +26,7 @@ bp = Blueprint("text2sql", url_prefix="/llm")
 @openapi.body(
     {
         "application/x-www-form-urlencoded": {
-            "schema": {
-                "type": "object",
-                "properties": {
-                    "llm_text": {"type": "string", "description": "大模型返回的SQL语句"},
-                },
-                "required": ["llm_text"],
-            }
+            "schema": get_schema(ProcessLlmOutRequest),
         }
     },
     description="SQL语句",
@@ -35,35 +36,23 @@ bp = Blueprint("text2sql", url_prefix="/llm")
     200,
     {
         "application/json": {
-            "schema": {
-                "type": "object",
-                "properties": {
-                    "data": {"type": "array", "description": "查询结果"},
-                    "columns": {"type": "array", "description": "列名"},
-                },
-            }
+            "schema": get_schema(ProcessLlmOutResponse),
         }
     },
     description="查询成功",
 )
 @async_json_resp
-async def process_llm_out(req: request.Request):
+@parse_params
+async def process_llm_out(req: Request, llm_text: str):
     """
     数据问答处理大模型返回SQL语句
+    :param req: 请求对象
+    :param llm_text: SQL语句（从表单中解析）
     """
     try:
-        # 获取请求体内容
-        # body_content = req.body
-        # # 将字节流解码为字符串
-        # body_str = body_content.decode("utf-8")
+        logging.info(f"query param: {llm_text}")
 
-        body_str = req.form.get("llm_text")
-
-        # 用户问题
-        # question_str = req.args.get("question")
-        logging.info(f"query param: {body_str}")
-
-        result = await exe_sql_query(body_str)
+        result = await exe_sql_query(llm_text)
         return result
     except Exception as e:
         logging.error(f"Error processing LLM output: {e}")
@@ -85,33 +74,21 @@ async def process_llm_out(req: request.Request):
     200,
     {
         "application/json": {
-            "schema": {
-                "type": "object",
-                "properties": {
-                    "reports": {
-                        "type": "array",
-                        "items": {
-                            "type": "object",
-                            "properties": {
-                                "title": {"type": "string", "description": "报告标题"},
-                                "content": {"type": "string", "description": "报告内容"},
-                            },
-                        },
-                        "description": "报告列表",
-                    },
-                },
-            }
+            "schema": get_schema(QueryGuidedReportResponse),
         }
     },
     description="查询成功",
 )
 @async_json_resp
-async def query_guided_report(req: request.Request):
+@parse_params
+async def query_guided_report(req: Request, query_str: str):
     """
     查询报告
+    :param req: 请求对象
+    :param query_str: 查询字符串（查询参数）
     """
     try:
-        question_str = req.args.get("query_str").strip().replace("\r", "")
+        question_str = query_str.strip().replace("\r", "")
         result = await select_report_by_title(question_str)
         return result
     except Exception as e:

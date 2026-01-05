@@ -14,6 +14,37 @@ from common.res_decorator import async_json_resp
 from common.exception import MyException
 from constants.code_enum import SysCodeEnum
 from services.user_service import get_user_info
+from common.param_parser import parse_params
+from model.schemas import (
+    DatasourceListResponse,
+    CreateDatasourceRequest,
+    CreateDatasourceResponse,
+    UpdateDatasourceRequest,
+    UpdateDatasourceResponse,
+    SyncTablesRequest,
+    SyncTablesResponse,
+    DeleteDatasourceResponse,
+    DatasourceDetailResponse,
+    CheckDatasourceRequest,
+    CheckDatasourceResponse,
+    GetTablesByConfRequest,
+    GetTablesByConfResponse,
+    GetFieldsByConfRequest,
+    GetFieldsByConfResponse,
+    TableListResponse,
+    FieldListResponse,
+    SaveTableRequest,
+    SaveTableResponse,
+    SaveFieldRequest,
+    SaveFieldResponse,
+    PreviewDataRequest,
+    PreviewDataResponse,
+    TableRelationRequest,
+    TableRelationResponse,
+    GetTableRelationResponse,
+    GetNeo4jRelationResponse,
+    get_schema,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -24,6 +55,15 @@ bp = Blueprint("datasource", url_prefix="/datasource")
 @openapi.summary("获取数据源列表")
 @openapi.description("获取当前用户的数据源列表")
 @openapi.tag("数据源管理")
+@openapi.response(
+    200,
+    {
+        "application/json": {
+            "schema": get_schema(DatasourceListResponse),
+        }
+    },
+    description="获取成功",
+)
 @async_json_resp
 async def get_datasource_list(req: request.Request):
     """获取数据源列表"""
@@ -64,35 +104,35 @@ async def get_datasource_list(req: request.Request):
 @openapi.body(
     {
         "application/json": {
-            "schema": {
-                "type": "object",
-                "properties": {
-                    "name": {"type": "string", "description": "数据源名称"},
-                    "description": {"type": "string", "description": "描述"},
-                    "type": {"type": "string", "description": "数据源类型"},
-                    "type_name": {"type": "string", "description": "类型名称"},
-                    "configuration": {"type": "string", "description": "配置信息(加密)"},
-                },
-                "required": ["name", "type", "configuration"],
-            }
+            "schema": get_schema(CreateDatasourceRequest),
         }
     },
     description="数据源信息",
     required=True,
 )
+@openapi.response(
+    200,
+    {
+        "application/json": {
+            "schema": get_schema(CreateDatasourceResponse),
+        }
+    },
+    description="创建成功",
+)
 @async_json_resp
-async def create_datasource(req: request.Request):
-    """创建数据源"""
+@parse_params
+async def create_datasource(req: request.Request, body: CreateDatasourceRequest):
+    """创建数据源
+    :param req: 请求对象
+    :param body: 创建数据源请求体（自动从请求中解析）
+    """
     try:
-        data = req.json
-        if not data.get("name") or not data.get("type") or not data.get("configuration"):
-            raise MyException(SysCodeEnum.PARAM_ERROR, "参数不完整")
+        data = body.model_dump()
 
         db_pool = get_db_pool()
         with db_pool.get_session() as session:
-            # TODO: 从请求中获取用户ID
-            user_id = req.ctx.get("user_id") if hasattr(req.ctx, "get") else 1
-            datasource = DatasourceService.create_datasource(session, data, user_id)
+            user_info = await get_user_info(req)
+            datasource = DatasourceService.create_datasource(session, data, user_info["id"])
 
             return {
                 "id": datasource.id,
@@ -111,11 +151,33 @@ async def create_datasource(req: request.Request):
 @openapi.summary("更新数据源")
 @openapi.description("更新数据源信息")
 @openapi.tag("数据源管理")
+@openapi.body(
+    {
+        "application/json": {
+            "schema": get_schema(UpdateDatasourceRequest),
+        }
+    },
+    description="数据源信息",
+    required=True,
+)
+@openapi.response(
+    200,
+    {
+        "application/json": {
+            "schema": get_schema(UpdateDatasourceResponse),
+        }
+    },
+    description="更新成功",
+)
 @async_json_resp
-async def update_datasource(req: request.Request):
-    """更新数据源"""
+@parse_params
+async def update_datasource(req: request.Request, body: UpdateDatasourceRequest):
+    """更新数据源
+    :param req: 请求对象
+    :param body: 更新数据源请求体（自动从请求中解析）
+    """
     try:
-        data = req.json
+        data = body.model_dump()
         ds_id = data.get("id")
         if not ds_id:
             raise MyException(SysCodeEnum.PARAM_ERROR, "缺少数据源ID")
@@ -141,13 +203,41 @@ async def update_datasource(req: request.Request):
 @openapi.summary("同步数据源表和字段")
 @openapi.description("将前端选择的表列表写入并同步字段，未包含的表/字段将被清理")
 @openapi.tag("数据源管理")
+@openapi.parameter(
+    name="ds_id",
+    location="path",
+    schema={"type": "integer"},
+    description="数据源ID",
+    required=True,
+)
+@openapi.body(
+    {
+        "application/json": {
+            "schema": get_schema(SyncTablesRequest),
+        }
+    },
+    description="表列表",
+    required=True,
+)
+@openapi.response(
+    200,
+    {
+        "application/json": {
+            "schema": get_schema(SyncTablesResponse),
+        }
+    },
+    description="同步成功",
+)
 @async_json_resp
-async def sync_tables(req: request.Request, ds_id: int):
-    """同步数据源表和字段"""
+@parse_params
+async def sync_tables(req: request.Request, ds_id: int, body: SyncTablesRequest):
+    """同步数据源表和字段
+    :param req: 请求对象
+    :param ds_id: 数据源ID（路径参数）
+    :param body: 同步表请求体（自动从请求中解析）
+    """
     try:
-        data = req.json or []
-        if not isinstance(data, list):
-            raise MyException(SysCodeEnum.PARAM_ERROR, "表数据格式错误")
+        data = body.tables if body.tables else []
 
         db_pool = get_db_pool()
         with db_pool.get_session() as session:
@@ -166,7 +256,24 @@ async def sync_tables(req: request.Request, ds_id: int):
 @openapi.summary("删除数据源")
 @openapi.description("删除指定的数据源")
 @openapi.tag("数据源管理")
+@openapi.parameter(
+    name="ds_id",
+    location="path",
+    schema={"type": "integer"},
+    description="数据源ID",
+    required=True,
+)
+@openapi.response(
+    200,
+    {
+        "application/json": {
+            "schema": get_schema(DeleteDatasourceResponse),
+        }
+    },
+    description="删除成功",
+)
 @async_json_resp
+@parse_params
 async def delete_datasource(req: request.Request, ds_id: int):
     """删除数据源"""
     try:
@@ -188,7 +295,24 @@ async def delete_datasource(req: request.Request, ds_id: int):
 @openapi.summary("获取数据源详情")
 @openapi.description("根据ID获取数据源详情")
 @openapi.tag("数据源管理")
+@openapi.parameter(
+    name="ds_id",
+    location="path",
+    schema={"type": "integer"},
+    description="数据源ID",
+    required=True,
+)
+@openapi.response(
+    200,
+    {
+        "application/json": {
+            "schema": get_schema(DatasourceDetailResponse),
+        }
+    },
+    description="获取成功",
+)
 @async_json_resp
+@parse_params
 async def get_datasource(req: request.Request, ds_id: int):
     """获取数据源详情"""
     try:
@@ -198,13 +322,39 @@ async def get_datasource(req: request.Request, ds_id: int):
             if not datasource:
                 raise MyException(SysCodeEnum.DATA_NOT_FOUND, "数据源不存在")
 
+            # 解密配置信息
+            configuration = datasource.configuration
+            if configuration:
+                try:
+                    from common.datasource_util import DatasourceConfigUtil
+                    import json
+                    config_dict = DatasourceConfigUtil.decrypt_config(configuration)
+                    configuration = json.dumps(config_dict)
+                except Exception as e:
+                    logger.error(f"解密配置失败: {e}")
+                    # 如果解密失败，尝试判断是否为明文（JSON或Python Dict字符串）并标准化为JSON
+                    try:
+                        import json
+                        # 尝试作为JSON解析
+                        json.loads(configuration)
+                    except:
+                        try:
+                            # 尝试作为Python Dict解析 (例如 {'a': 1})
+                            import ast
+                            config_dict = ast.literal_eval(configuration)
+                            if isinstance(config_dict, dict):
+                                configuration = json.dumps(config_dict)
+                        except:
+                            # 确实无法解析，保持原样
+                            pass
+
             return {
                 "id": datasource.id,
                 "name": datasource.name,
                 "description": datasource.description,
                 "type": datasource.type,
                 "type_name": datasource.type_name,
-                "configuration": datasource.configuration,
+                "configuration": configuration,
                 "status": datasource.status,
                 "num": datasource.num,
                 "table_relation": datasource.table_relation,
@@ -221,14 +371,35 @@ async def get_datasource(req: request.Request, ds_id: int):
 @openapi.summary("测试数据源连接")
 @openapi.description("测试数据源连接是否正常")
 @openapi.tag("数据源管理")
+@openapi.body(
+    {
+        "application/json": {
+            "schema": get_schema(CheckDatasourceRequest),
+        }
+    },
+    description="测试连接请求",
+    required=True,
+)
+@openapi.response(
+    200,
+    {
+        "application/json": {
+            "schema": get_schema(CheckDatasourceResponse),
+        }
+    },
+    description="测试成功",
+)
 @async_json_resp
-async def check_datasource(req: request.Request):
-    """测试数据源连接"""
+@parse_params
+async def check_datasource(req: request.Request, body: CheckDatasourceRequest):
+    """测试数据源连接
+    :param req: 请求对象
+    :param body: 测试连接请求体（自动从请求中解析）
+    """
     try:
-        data = req.json
-        ds_id = data.get("id")
-        ds_type = data.get("type")
-        configuration = data.get("configuration")
+        ds_id = body.id
+        ds_type = body.type
+        configuration = body.configuration
 
         # 如果提供了配置信息，直接测试
         if ds_type and configuration:
@@ -260,16 +431,34 @@ async def check_datasource(req: request.Request):
 @openapi.summary("根据配置获取表列表")
 @openapi.description("根据数据源配置获取表列表")
 @openapi.tag("数据源管理")
+@openapi.body(
+    {
+        "application/json": {
+            "schema": get_schema(GetTablesByConfRequest),
+        }
+    },
+    description="配置信息",
+    required=True,
+)
+@openapi.response(
+    200,
+    {
+        "application/json": {
+            "schema": get_schema(GetTablesByConfResponse),
+        }
+    },
+    description="获取成功",
+)
 @async_json_resp
-async def get_tables_by_conf(req: request.Request):
-    """根据配置获取表列表"""
+@parse_params
+async def get_tables_by_conf(req: request.Request, body: GetTablesByConfRequest):
+    """根据配置获取表列表
+    :param req: 请求对象
+    :param body: 配置请求体（自动从请求中解析）
+    """
     try:
-        data = req.json
-        ds_type = data.get("type")
-        configuration = data.get("configuration")
-
-        if not ds_type or not configuration:
-            raise MyException(SysCodeEnum.PARAM_ERROR, "缺少数据源类型或配置信息")
+        ds_type = body.type
+        configuration = body.configuration
 
         tables = DatasourceService.get_tables_by_config(ds_type, configuration)
 
@@ -285,15 +474,35 @@ async def get_tables_by_conf(req: request.Request):
 @openapi.summary("根据配置获取表字段列表")
 @openapi.description("提供数据源类型、配置、表名，直接返回字段列表")
 @openapi.tag("数据源管理")
+@openapi.body(
+    {
+        "application/json": {
+            "schema": get_schema(GetFieldsByConfRequest),
+        }
+    },
+    description="配置信息",
+    required=True,
+)
+@openapi.response(
+    200,
+    {
+        "application/json": {
+            "schema": get_schema(GetFieldsByConfResponse),
+        }
+    },
+    description="获取成功",
+)
 @async_json_resp
-async def get_fields_by_conf(req: request.Request):
+@parse_params
+async def get_fields_by_conf(req: request.Request, body: GetFieldsByConfRequest):
+    """根据配置获取字段列表
+    :param req: 请求对象
+    :param body: 配置请求体（自动从请求中解析）
+    """
     try:
-        data = req.json or {}
-        ds_type = data.get("type")
-        config = data.get("configuration")
-        table_name = data.get("table_name") or data.get("tableName")
-        if not ds_type or not config or not table_name:
-            raise MyException(SysCodeEnum.PARAM_ERROR, "缺少必要参数")
+        ds_type = body.type
+        config = body.configuration
+        table_name = body.table_name
         fields = DatasourceService.get_fields_by_config(ds_type, config, table_name)
         return fields
     except MyException:
@@ -307,7 +516,24 @@ async def get_fields_by_conf(req: request.Request):
 @openapi.summary("获取数据源表列表")
 @openapi.description("获取指定数据源的所有表")
 @openapi.tag("数据源管理")
+@openapi.parameter(
+    name="ds_id",
+    location="path",
+    schema={"type": "integer"},
+    description="数据源ID",
+    required=True,
+)
+@openapi.response(
+    200,
+    {
+        "application/json": {
+            "schema": get_schema(TableListResponse),
+        }
+    },
+    description="获取成功",
+)
 @async_json_resp
+@parse_params
 async def get_table_list(req: request.Request, ds_id: int):
     """获取数据源表列表"""
     try:
@@ -338,7 +564,24 @@ async def get_table_list(req: request.Request, ds_id: int):
 @openapi.summary("获取表字段列表")
 @openapi.description("获取指定表的所有字段")
 @openapi.tag("数据源管理")
+@openapi.parameter(
+    name="table_id",
+    location="path",
+    schema={"type": "integer"},
+    description="表ID",
+    required=True,
+)
+@openapi.response(
+    200,
+    {
+        "application/json": {
+            "schema": get_schema(FieldListResponse),
+        }
+    },
+    description="获取成功",
+)
 @async_json_resp
+@parse_params
 async def get_field_list(req: request.Request, table_id: int):
     """获取表字段列表"""
     try:
@@ -372,11 +615,33 @@ async def get_field_list(req: request.Request, table_id: int):
 @openapi.summary("保存表信息")
 @openapi.description("保存表的自定义注释等信息")
 @openapi.tag("数据源管理")
+@openapi.body(
+    {
+        "application/json": {
+            "schema": get_schema(SaveTableRequest),
+        }
+    },
+    description="表信息",
+    required=True,
+)
+@openapi.response(
+    200,
+    {
+        "application/json": {
+            "schema": get_schema(SaveTableResponse),
+        }
+    },
+    description="保存成功",
+)
 @async_json_resp
-async def save_table(req: request.Request):
-    """保存表信息"""
+@parse_params
+async def save_table(req: request.Request, body: SaveTableRequest):
+    """保存表信息
+    :param req: 请求对象
+    :param body: 保存表请求体（自动从请求中解析）
+    """
     try:
-        data = req.json
+        data = body.model_dump()
         table_id = data.get("id")
         if not table_id:
             raise MyException(SysCodeEnum.PARAM_ERROR, "缺少表ID")
@@ -399,11 +664,33 @@ async def save_table(req: request.Request):
 @openapi.summary("保存字段信息")
 @openapi.description("保存字段的自定义注释和状态等信息")
 @openapi.tag("数据源管理")
+@openapi.body(
+    {
+        "application/json": {
+            "schema": get_schema(SaveFieldRequest),
+        }
+    },
+    description="字段信息",
+    required=True,
+)
+@openapi.response(
+    200,
+    {
+        "application/json": {
+            "schema": get_schema(SaveFieldResponse),
+        }
+    },
+    description="保存成功",
+)
 @async_json_resp
-async def save_field(req: request.Request):
-    """保存字段信息"""
+@parse_params
+async def save_field(req: request.Request, body: SaveFieldRequest):
+    """保存字段信息
+    :param req: 请求对象
+    :param body: 保存字段请求体（自动从请求中解析）
+    """
     try:
-        data = req.json
+        data = body.model_dump()
         field_id = data.get("id")
         if not field_id:
             raise MyException(SysCodeEnum.PARAM_ERROR, "缺少字段ID")
@@ -422,24 +709,45 @@ async def save_field(req: request.Request):
         raise MyException(SysCodeEnum.SYSTEM_ERROR, f"保存字段信息失败: {str(e)}")
 
 
-@bp.post("/previewData/<ds_id:int>")
+@bp.post("/previewData")
 @openapi.summary("预览表数据")
 @openapi.description("预览指定表的数据（最多100条）")
 @openapi.tag("数据源管理")
+@openapi.body(
+    {
+        "application/json": {
+            "schema": get_schema(PreviewDataRequest),
+        }
+    },
+    description="预览请求",
+    required=True,
+)
+@openapi.response(
+    200,
+    {
+        "application/json": {
+            "schema": get_schema(PreviewDataResponse),
+        }
+    },
+    description="预览成功",
+)
 @async_json_resp
-async def preview_data(req: request.Request, ds_id: int):
-    """预览表数据"""
+@parse_params
+async def preview_data(req: request.Request, body: PreviewDataRequest):
+    """预览表数据
+    :param req: 请求对象
+    :param body: 预览数据请求体（自动从请求中解析）
+    """
     try:
-        data = req.json
-        table = data.get("table")
-        fields = data.get("fields", [])
+        table = body.table
+        fields = body.fields if body.fields else []
 
         if not table or not table.get("table_name"):
             raise MyException(SysCodeEnum.PARAM_ERROR, "缺少表信息")
 
         db_pool = get_db_pool()
         with db_pool.get_session() as session:
-            preview_result = DatasourceService.preview_table_data(session, ds_id, table, fields)
+            preview_result = DatasourceService.preview_table_data(session, body.ds_id, table, fields)
             return preview_result
     except MyException:
         raise
@@ -448,20 +756,41 @@ async def preview_data(req: request.Request, ds_id: int):
         raise MyException(SysCodeEnum.SYSTEM_ERROR, f"预览数据失败: {str(e)}")
 
 
-@bp.post("/tableRelation/<ds_id:int>")
+@bp.post("/tableRelation")
 @openapi.summary("保存表关系")
 @openapi.description("保存数据源的表关系数据")
 @openapi.tag("数据源管理")
+@openapi.body(
+    {
+        "application/json": {
+            "schema": get_schema(TableRelationRequest),
+        }
+    },
+    description="表关系数据",
+    required=True,
+)
+@openapi.response(
+    200,
+    {
+        "application/json": {
+            "schema": get_schema(TableRelationResponse),
+        }
+    },
+    description="保存成功",
+)
+@parse_params
 @async_json_resp
-async def save_table_relation(req: request.Request, ds_id: int):
-    """保存表关系"""
+async def save_table_relation(req: request.Request, body: TableRelationRequest):
+    """保存表关系
+    :param req: 请求对象
+    :param body: 表关系请求体（自动从请求中解析）
+    """
     try:
-        data = req.json
-        relation_data = data if isinstance(data, list) else []
+        relation_data = body.relations if body.relations else []
 
         db_pool = get_db_pool()
         with db_pool.get_session() as session:
-            success = DatasourceService.save_table_relation(session, ds_id, relation_data)
+            success = DatasourceService.save_table_relation(session, body.ds_id, relation_data)
             if not success:
                 raise MyException(SysCodeEnum.DATA_NOT_FOUND, "数据源不存在")
 
@@ -477,6 +806,22 @@ async def save_table_relation(req: request.Request, ds_id: int):
 @openapi.summary("获取表关系")
 @openapi.description("获取数据源的表关系数据")
 @openapi.tag("数据源管理")
+@openapi.parameter(
+    name="ds_id",
+    location="path",
+    schema={"type": "integer"},
+    description="数据源ID",
+    required=True,
+)
+@openapi.response(
+    200,
+    {
+        "application/json": {
+            "schema": get_schema(GetTableRelationResponse),
+        }
+    },
+    description="获取成功",
+)
 @async_json_resp
 async def get_table_relation(req: request.Request, ds_id: int):
     """获取表关系"""
@@ -494,6 +839,22 @@ async def get_table_relation(req: request.Request, ds_id: int):
 @openapi.summary("获取 Neo4j 图数据库关系")
 @openapi.description("从 Neo4j 图数据库获取数据源的表关系数据")
 @openapi.tag("数据源管理")
+@openapi.parameter(
+    name="ds_id",
+    location="path",
+    schema={"type": "integer"},
+    description="数据源ID",
+    required=True,
+)
+@openapi.response(
+    200,
+    {
+        "application/json": {
+            "schema": get_schema(GetNeo4jRelationResponse),
+        }
+    },
+    description="获取成功",
+)
 @async_json_resp
 async def get_neo4j_relation(req: request.Request, ds_id: int):
     """获取 Neo4j 图数据库关系"""

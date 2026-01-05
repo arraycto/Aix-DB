@@ -13,7 +13,7 @@ export async function fetch_datasource_list() {
     mode: 'cors',
     method: 'get',
     headers: {
-      'Authorization': `Bearer ${token}`,
+      Authorization: `Bearer ${token}`,
     },
   })
   return fetch(req)
@@ -30,7 +30,7 @@ export async function fetch_datasource_table_list(dsId: number | string) {
     mode: 'cors',
     method: 'post',
     headers: {
-      'Authorization': `Bearer ${token}`,
+      Authorization: `Bearer ${token}`,
     },
   })
   return fetch(req)
@@ -47,7 +47,7 @@ export async function fetch_datasource_field_list(tableId: number | string) {
     mode: 'cors',
     method: 'post',
     headers: {
-      'Authorization': `Bearer ${token}`,
+      Authorization: `Bearer ${token}`,
     },
   })
   return fetch(req)
@@ -59,7 +59,7 @@ export async function fetch_datasource_field_list(tableId: number | string) {
 export async function fetch_datasource_preview_data(dsId: number | string, buildData: any) {
   const userStore = useUserStore()
   const token = userStore.getUserToken()
-  const url = new URL(`${location.origin}/sanic/datasource/previewData/${dsId}`)
+  const url = new URL(`${location.origin}/sanic/datasource/previewData`)
   const req = new Request(url, {
     mode: 'cors',
     method: 'post',
@@ -67,7 +67,10 @@ export async function fetch_datasource_preview_data(dsId: number | string, build
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${token}`,
     },
-    body: JSON.stringify(buildData),
+    body: JSON.stringify({
+      ...buildData,
+      ds_id: dsId,
+    }),
   })
   return fetch(req)
 }
@@ -121,7 +124,7 @@ export async function fetch_datasource_detail(id: number | string) {
     mode: 'cors',
     method: 'post',
     headers: {
-      'Authorization': `Bearer ${token}`,
+      Authorization: `Bearer ${token}`,
     },
   })
   return fetch(req)
@@ -138,7 +141,7 @@ export async function delete_datasource(id: number | string) {
     mode: 'cors',
     method: 'post',
     headers: {
-      'Authorization': `Bearer ${token}`,
+      Authorization: `Bearer ${token}`,
     },
   })
   return fetch(req)
@@ -155,10 +158,103 @@ export async function fetch_neo4j_relation(dsId: number | string) {
     mode: 'cors',
     method: 'post',
     headers: {
-      'Authorization': `Bearer ${token}`,
+      Authorization: `Bearer ${token}`,
     },
   })
   return fetch(req)
 }
 
+/**
+ * 检查数据源连接
+ */
+export async function check_datasource_connection(data: any) {
+  const userStore = useUserStore()
+  const token = userStore.getUserToken()
+  const url = new URL(`${location.origin}/sanic/datasource/check`)
+  const req = new Request(url, {
+    mode: 'cors',
+    method: 'post',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`,
+    },
+    body: JSON.stringify(data),
+  })
+  return fetch(req)
+}
 
+/**
+ * 根据配置获取表列表
+ */
+export async function fetch_tables_by_conf(data: any) {
+  const userStore = useUserStore()
+  const token = userStore.getUserToken()
+  const url = new URL(`${location.origin}/sanic/datasource/getTablesByConf`)
+  const req = new Request(url, {
+    mode: 'cors',
+    method: 'post',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`,
+    },
+    body: JSON.stringify(data),
+  })
+  return fetch(req)
+}
+
+/**
+ * 新增数据源
+ */
+export async function add_datasource(data: any) {
+  const userStore = useUserStore()
+  const token = userStore.getUserToken()
+  const url = new URL(`${location.origin}/sanic/datasource/add`)
+  const req = new Request(url, {
+    mode: 'cors',
+    method: 'post',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`,
+    },
+    body: JSON.stringify(data),
+  })
+  return fetch(req)
+}
+
+/**
+ * 更新数据源
+ */
+export async function update_datasource(data: any) {
+  const userStore = useUserStore()
+  const token = userStore.getUserToken()
+  const url = new URL(`${location.origin}/sanic/datasource/update`)
+  const req = new Request(url, {
+    mode: 'cors',
+    method: 'post',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`,
+    },
+    body: JSON.stringify(data),
+  })
+  return fetch(req)
+}
+
+/**
+ * 同步数据源表
+ */
+export async function sync_datasource_tables(dsId: number | string, tables: any[]) {
+  const userStore = useUserStore()
+  const token = userStore.getUserToken()
+  const url = new URL(`${location.origin}/sanic/datasource/syncTables/${dsId}`)
+  const req = new Request(url, {
+    mode: 'cors',
+    method: 'post',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`,
+    },
+    body: JSON.stringify(tables),
+  })
+  return fetch(req)
+}

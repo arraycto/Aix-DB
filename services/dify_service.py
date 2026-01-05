@@ -49,19 +49,21 @@ class DiFyRequest:
     def __init__(self):
         pass
 
-    async def exec_query(self, res):
+    async def exec_query(self, res, req_obj=None, token=None):
         """
 
         :return:
         """
         try:
-            # 获取请求体内容 从res流对象获取request-body
-            req_body_content = res.request.body
-            # 将字节流解码为字符串
-            body_str = req_body_content.decode("utf-8")
+            if req_obj is None:
+                # 获取请求体内容 从res流对象获取request-body
+                req_body_content = res.request.body
+                # 将字节流解码为字符串
+                body_str = req_body_content.decode("utf-8")
 
-            req_obj = json.loads(body_str)
-            logging.info(f"query param: {body_str}")
+                req_obj = json.loads(body_str)
+            
+            logging.info(f"query param: {json.dumps(req_obj, ensure_ascii=False)}")
 
             # str(uuid.uuid4())
             chat_id = req_obj.get("chat_id")
@@ -77,11 +79,12 @@ class DiFyRequest:
             cleaned_query = re.sub(r"\s+", "", query)
 
             # 获取登录用户信息
-            token = res.request.headers.get("Authorization")
-            if not token:
-                raise MyException(SysCodeEnum.c_401)
-            if token.startswith("Bearer "):
-                token = token.split(" ")[1]
+            if token is None:
+                token = res.request.headers.get("Authorization")
+                if not token:
+                    raise MyException(SysCodeEnum.c_401)
+                if token.startswith("Bearer "):
+                    token = token.split(" ")[1]
 
             # 调用智能体
             if qa_type == DiFyAppEnum.COMMON_QA.value[0]:

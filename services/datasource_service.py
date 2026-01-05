@@ -43,7 +43,9 @@ class DatasourceService:
 
         # 如果配置是字典，需要加密
         configuration = data.get("configuration", "")
-        if isinstance(configuration, str):
+        if isinstance(configuration, dict):
+            configuration = DatasourceConfigUtil.encrypt_config(configuration)
+        elif isinstance(configuration, str):
             try:
                 # 尝试解析JSON，如果是JSON字符串则加密
                 config_dict = json.loads(configuration)
@@ -199,7 +201,19 @@ class DatasourceService:
         if "description" in data:
             datasource.description = data["description"]
         if "configuration" in data:
-            datasource.configuration = data["configuration"]
+            configuration = data["configuration"]
+            if isinstance(configuration, dict):
+                from common.datasource_util import DatasourceConfigUtil
+                configuration = DatasourceConfigUtil.encrypt_config(configuration)
+            elif isinstance(configuration, str):
+                try:
+                    from common.datasource_util import DatasourceConfigUtil
+                    import json
+                    config_dict = json.loads(configuration)
+                    configuration = DatasourceConfigUtil.encrypt_config(config_dict)
+                except (json.JSONDecodeError, TypeError):
+                    pass
+            datasource.configuration = configuration
         if "status" in data:
             datasource.status = data["status"]
 

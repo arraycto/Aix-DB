@@ -1,6 +1,15 @@
 <script lang="ts" setup>
 import type { FormInst, FormRules } from 'naive-ui'
 import { computed, reactive, ref, watch } from 'vue'
+import {
+  add_datasource,
+  check_datasource_connection,
+  fetch_datasource_detail,
+  fetch_datasource_table_list,
+  fetch_tables_by_conf,
+  sync_datasource_tables,
+  update_datasource,
+} from '@/api/datasource'
 
 interface Props {
   show: boolean
@@ -123,15 +132,36 @@ watch(() => formData.type, (newType) => {
 })
 
 // 初始化表单
-const initForm = () => {
+const initForm = async () => {
   if (props.datasource) {
     // 编辑模式
     formData.name = props.datasource.name || ''
     formData.description = props.datasource.description || ''
     formData.type = props.datasource.type || 'mysql'
-    // TODO: 解密配置信息
-    // const config = JSON.parse(decrypt(props.datasource.configuration))
-    // Object.assign(formData, config)
+
+    // 获取数据源详情（包含解密后的配置）
+    try {
+      const response = await fetch_datasource_detail(props.datasource.id)
+      if (response.ok) {
+        const result = await response.json()
+        if (result.code === 200 && result.data) {
+          const data = result.data
+          formData.name = data.name
+          formData.description = data.description
+          formData.type = data.type
+          if (data.configuration) {
+            try {
+              const config = JSON.parse(data.configuration)
+              Object.assign(formData, config)
+            } catch (e) {
+              console.error('解析配置信息失败:', e)
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.error('获取数据源详情失败:', error)
+    }
   } else {
     // 新建模式
     Object.assign(formData, {
@@ -169,17 +199,10 @@ const testConnection = async () => {
   testing.value = true
   try {
     const config = buildConfiguration()
-    const url = new URL(`${location.origin}/sanic/datasource/check`)
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        id: props.datasource?.id,
-        type: formData.type,
-        configuration: JSON.stringify(config),
-      }),
+    const response = await check_datasource_connection({
+      id: props.datasource?.id,
+      type: formData.type,
+      configuration: JSON.stringify(config),
     })
 
     if (!response.ok) {
@@ -207,16 +230,9 @@ const fetchTableList = async () => {
   tableListLoading.value = true
   try {
     const config = buildConfiguration()
-    const url = new URL(`${location.origin}/sanic/datasource/getTablesByConf`)
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        type: formData.type,
-        configuration: JSON.stringify(config),
-      }),
+    const response = await fetch_tables_by_conf({
+      type: formData.type,
+      configuration: JSON.stringify(config),
     })
 
     if (!response.ok) {
@@ -228,10 +244,7 @@ const fetchTableList = async () => {
       tableList.value = result.data || []
       // 如果是编辑模式，加载已选中的表
       if (props.datasource?.id) {
-        const tablesUrl = new URL(`${location.origin}/sanic/datasource/tableList/${props.datasource.id}`)
-        const tablesResponse = await fetch(tablesUrl, {
-          method: 'POST',
-        })
+        const tablesResponse = await fetch_datasource_table_list(props.datasource.id)
 
         if (!tablesResponse.ok) {
           throw new Error(`HTTP error! status: ${tablesResponse.status}`)
@@ -340,27 +353,13 @@ const handleSave = async () => {
     let dsId = props.datasource?.id
     if (props.datasource?.id) {
       // 更新
-      const url = new URL(`${location.origin}/sanic/datasource/update`)
-      response = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          id: props.datasource.id,
-          ...requestData,
-        }),
+      response = await update_datasource({
+        id: props.datasource.id,
+        ...requestData,
       })
     } else {
       // 新建
-      const url = new URL(`${location.origin}/sanic/datasource/add`)
-      response = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(requestData),
-      })
+      response = await add_datasource(requestData)
     }
 
     if (!response.ok) {
@@ -374,14 +373,7 @@ const handleSave = async () => {
       // 将选中表同步到后端表/字段（调用新接口，清理未选表）
       if (dsId) {
         try {
-          const syncUrl = new URL(`${location.origin}/sanic/datasource/syncTables/${dsId}`)
-          await fetch(syncUrl, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(tables),
-          })
+          await sync_datasource_tables(dsId, tables)
         } catch (syncErr) {
           console.error('同步表列表失败:', syncErr)
         }

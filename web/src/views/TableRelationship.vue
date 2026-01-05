@@ -573,11 +573,14 @@ const save = async () => {
   }
   try {
     const cells = graph.toJSON().cells || []
-    const url = new URL(`${location.origin}/sanic/datasource/tableRelation/${props.dsId}`)
+    const url = new URL(`${location.origin}/sanic/datasource/tableRelation`)
     const response = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(cells),
+      body: JSON.stringify({
+        ds_id: props.dsId,
+        relations: cells,
+      }),
     })
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`)

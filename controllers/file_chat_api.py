@@ -1,4 +1,5 @@
 import logging
+from typing import Optional
 
 from common.exception import MyException
 from common.minio_util import MinioUtils
@@ -8,6 +9,18 @@ from sanic import Blueprint, Request
 from services.file_chat_service import read_excel, read_file_columns
 from services.text2_sql_service import exe_file_sql_query
 from sanic_ext import openapi
+from common.param_parser import parse_params
+from model.schemas import (
+    ReadFileRequest,
+    ReadFileResponse,
+    ReadFileColumnRequest,
+    ReadFileColumnResponse,
+    UploadFileResponse,
+    UploadFileAndParseResponse,
+    ProcessFileLlmOutRequest,
+    ProcessFileLlmOutResponse,
+    get_schema,
+)
 
 bp = Blueprint("fileChatApi", url_prefix="/file")
 
@@ -23,17 +36,12 @@ minio_utils = MinioUtils()
     location="query",
     schema={"type": "string"},
     description="文件地址（MinIO对象key）",
-    required=True,
+    required=False,
 )
 @openapi.body(
     {
         "application/json": {
-            "schema": {
-                "type": "object",
-                "properties": {
-                    "file_qa_str": {"type": "string", "description": "文件地址（MinIO对象key）"},
-                },
-            }
+            "schema": get_schema(ReadFileRequest),
         }
     },
     description="文件地址（可通过query参数或body传递）",
@@ -43,26 +51,24 @@ minio_utils = MinioUtils()
     200,
     {
         "application/json": {
-            "schema": {
-                "type": "object",
-                "properties": {
-                    "data": {"type": "array", "description": "文件第一行数据"},
-                    "columns": {"type": "array", "description": "列名列表"},
-                },
-            }
+            "schema": get_schema(ReadFileResponse),
         }
     },
     description="文件内容",
 )
 @async_json_resp
-async def read_file(req: Request) -> dict:
+@parse_params
+async def read_file(request: Request, file_qa_str: Optional[str] = None, body: Optional[ReadFileRequest] = None) -> dict:
     """
     读取excel文件第一行内容
+    :param request: 请求对象
+    :param file_qa_str: 文件地址（从query参数自动解析）
+    :param body: 请求体（从JSON自动解析）
     """
-
-    file_key = req.args.get("file_qa_str")
-    if not file_key:
-        file_key = req.json.get("file_qa_str")
+    # 优先使用query参数，否则使用body
+    file_key = file_qa_str
+    if not file_key and body:
+        file_key = body.file_qa_str
 
     file_key = file_key.split("|")[0]  # 取文档地址
 
@@ -80,17 +86,12 @@ async def read_file(req: Request) -> dict:
     location="query",
     schema={"type": "string"},
     description="文件地址（MinIO对象key）",
-    required=True,
+    required=False,
 )
 @openapi.body(
     {
         "application/json": {
-            "schema": {
-                "type": "object",
-                "properties": {
-                    "file_qa_str": {"type": "string", "description": "文件地址（MinIO对象key）"},
-                },
-            }
+            "schema": get_schema(ReadFileColumnRequest),
         }
     },
     description="文件地址（可通过query参数或body传递）",
@@ -100,31 +101,24 @@ async def read_file(req: Request) -> dict:
     200,
     {
         "application/json": {
-            "schema": {
-                "type": "object",
-                "properties": {
-                    "columns": {
-                        "type": "array",
-                        "items": {"type": "string"},
-                        "description": "列名列表",
-                    },
-                },
-            }
+            "schema": get_schema(ReadFileColumnResponse),
         }
     },
     description="列信息",
 )
 @async_json_resp
-async def read_file_column(req: Request):
+@parse_params
+async def read_file_column(req: Request, file_qa_str: Optional[str] = None, body: Optional[ReadFileColumnRequest] = None):
     """
-    读取excel文件第一行内容
-    :param req:
+    读取excel文件列信息
+    :param req: 请求对象
+    :param file_qa_str: 文件地址（可通过query参数或body传递）
+    :param body: 请求体
     :return:
     """
-
-    file_key = req.args.get("file_qa_str")
-    if not file_key:
-        file_key = req.json.get("file_qa_str")
+    file_key = file_qa_str
+    if not file_key and body:
+        file_key = body.file_qa_str
 
     file_key = file_key.split("|")[0]  # 取文档地址
 
@@ -160,13 +154,7 @@ async def read_file_column(req: Request):
     200,
     {
         "application/json": {
-            "schema": {
-                "type": "object",
-                "properties": {
-                    "file_key": {"type": "string", "description": "文件在MinIO中的key"},
-                    "file_url": {"type": "string", "description": "文件访问URL"},
-                },
-            }
+            "schema": get_schema(UploadFileResponse),
         }
     },
     description="上传成功",
@@ -209,13 +197,7 @@ async def upload_file(request: Request):
     200,
     {
         "application/json": {
-            "schema": {
-                "type": "object",
-                "properties": {
-                    "file_key": {"type": "string", "description": "文件在MinIO中的key"},
-                    "parsed_content": {"type": "object", "description": "解析后的文件内容"},
-                },
-            }
+            "schema": get_schema(UploadFileAndParseResponse),
         }
     },
     description="上传并解析成功",
@@ -245,12 +227,7 @@ async def upload_file_and_parse(request: Request):
 @openapi.body(
     {
         "application/json": {
-            "schema": {
-                "type": "object",
-                "properties": {
-                    "sql": {"type": "string", "description": "大模型返回的SQL语句"},
-                },
-            }
+            "schema": get_schema(ProcessFileLlmOutRequest),
         }
     },
     description="SQL语句（通过body传递）",
@@ -260,30 +237,22 @@ async def upload_file_and_parse(request: Request):
     200,
     {
         "application/json": {
-            "schema": {
-                "type": "object",
-                "properties": {
-                    "data": {"type": "array", "description": "查询结果"},
-                    "columns": {"type": "array", "description": "列名"},
-                },
-            }
+            "schema": get_schema(ProcessFileLlmOutResponse),
         }
     },
     description="查询成功",
 )
 @async_json_resp
-async def process_file_llm_out(req):
+@parse_params
+async def process_file_llm_out(req: Request, file_key: str, body: ProcessFileLlmOutRequest):
     """
     文件问答处理大模型返回SQL语句
+    :param req: 请求对象
+    :param file_key: 文件key（查询参数）
+    :param body: SQL请求体（自动从请求中解析）
     """
     try:
-        # 获取请求体内容
-        body_content = req.body
-        # # 将字节流解码为字符串
-        body_str = body_content.decode("utf-8")
-
-        # 文件key
-        file_key = req.args.get("file_key")
+        body_str = body.sql
         logging.info(f"query param: {body_str}")
 
         result = await exe_file_sql_query(file_key, body_str)
