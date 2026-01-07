@@ -210,7 +210,7 @@ onMounted(() => {
               <div class="card-actions">
                 <div class="left-actions">
                   <n-button
-                    v-if="!item.default_model"
+                    v-if="!item.default_model && item.model_type === 1"
                     size="small"
                     text
                     type="primary"
