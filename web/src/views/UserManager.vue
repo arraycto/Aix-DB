@@ -1,8 +1,9 @@
 <script lang="ts" setup>
-import { h, ref, reactive, onMounted } from 'vue'
-import { NButton, NSpace, useDialog, FormInst } from 'naive-ui'
-import { queryUserList, addUser, updateUser, deleteUser } from '@/api/user'
+import type { FormInst } from 'naive-ui'
+import { NButton, NSpace, useDialog } from 'naive-ui'
+import { h, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { addUser, deleteUser, queryUserList, updateUser } from '@/api/user'
 
 const router = useRouter()
 const dialog = useDialog()
@@ -46,18 +47,18 @@ const columns = [
             size: 'small',
             type: 'primary',
             secondary: true,
-            onClick: () => handleEdit(row)
+            onClick: () => handleEdit(row),
           }, { default: () => '编辑' }),
           h(NButton, {
             size: 'small',
             type: 'error',
             secondary: true,
-            onClick: () => handleDelete(row)
-          }, { default: () => '删除' })
-        ]
+            onClick: () => handleDelete(row),
+          }, { default: () => '删除' }),
+        ],
       })
-    }
-  }
+    },
+  },
 ]
 
 // Methods
@@ -128,7 +129,7 @@ const handleDelete = (row: any) => {
         console.error(e)
         window.$message?.error('网络错误')
       }
-    }
+    },
   })
 }
 
@@ -140,13 +141,13 @@ const handleSave = async () => {
         window.$message?.error('请输入密码')
         return
       }
-      
+
       try {
         let res
         if (modalType.value === 'add') {
-           res = await addUser(formModel)
+          res = await addUser(formModel)
         } else {
-           res = await updateUser(formModel)
+          res = await updateUser(formModel)
         }
         const result = await res.json()
         if (result.code === 200) {
@@ -165,7 +166,7 @@ const handleSave = async () => {
 }
 
 const handleBack = () => {
-    router.push('/')
+  router.push('/')
 }
 
 onMounted(() => {
@@ -177,7 +178,10 @@ onMounted(() => {
   <div class="user-manager">
     <div class="header">
       <div class="title-section">
-        <div class="back-btn" @click="handleBack">
+        <div
+          class="back-btn"
+          @click="handleBack"
+        >
           <div class="i-hugeicons:arrow-left-01 text-24"></div>
         </div>
         <h2>用户管理</h2>
@@ -194,13 +198,19 @@ onMounted(() => {
             <div class="i-carbon-search text-gray-400"></div>
           </template>
         </n-input>
-        <n-button secondary @click="handleSearch">
+        <n-button
+          secondary
+          @click="handleSearch"
+        >
           <template #icon>
             <div class="i-carbon-search"></div>
           </template>
           搜索
         </n-button>
-        <n-button type="primary" @click="handleAdd">
+        <n-button
+          type="primary"
+          @click="handleAdd"
+        >
           <template #icon>
             <div class="i-carbon-add"></div>
           </template>
@@ -217,7 +227,10 @@ onMounted(() => {
         :pagination="false"
         class="user-table"
       />
-      <div class="pagination-container" v-if="total > 0">
+      <div
+        v-if="total > 0"
+        class="pagination-container"
+      >
         <n-pagination
           v-model:page="page"
           :page-size="pageSize"
@@ -227,7 +240,11 @@ onMounted(() => {
       </div>
     </div>
 
-    <n-modal v-model:show="showModal" preset="dialog" :title="modalType === 'add' ? '添加用户' : '编辑用户'">
+    <n-modal
+      v-model:show="showModal"
+      preset="dialog"
+      :title="modalType === 'add' ? '添加用户' : '编辑用户'"
+    >
       <n-form
         ref="formRef"
         :model="formModel"
@@ -237,13 +254,28 @@ onMounted(() => {
         require-mark-placement="right-hanging"
         class="mt-4"
       >
-        <n-form-item label="用户名" path="userName">
-          <n-input v-model:value="formModel.userName" placeholder="请输入用户名" />
+        <n-form-item
+          label="用户名"
+          path="userName"
+        >
+          <n-input
+            v-model:value="formModel.userName"
+            placeholder="请输入用户名"
+          />
         </n-form-item>
-        <n-form-item label="手机号" path="mobile">
-          <n-input v-model:value="formModel.mobile" placeholder="请输入手机号" />
+        <n-form-item
+          label="手机号"
+          path="mobile"
+        >
+          <n-input
+            v-model:value="formModel.mobile"
+            placeholder="请输入手机号"
+          />
         </n-form-item>
-        <n-form-item label="密码" path="password">
+        <n-form-item
+          label="密码"
+          path="password"
+        >
           <n-input
             v-model:value="formModel.password"
             type="password"
@@ -254,8 +286,15 @@ onMounted(() => {
       </n-form>
       <template #action>
         <n-space>
-          <n-button @click="showModal = false">取消</n-button>
-          <n-button type="primary" @click="handleSave">保存</n-button>
+          <n-button @click="showModal = false">
+            取消
+          </n-button>
+          <n-button
+            type="primary"
+            @click="handleSave"
+          >
+            保存
+          </n-button>
         </n-space>
       </template>
     </n-modal>
@@ -326,9 +365,9 @@ onMounted(() => {
     border-radius: 12px;
     border: 1px solid #f3f4f6;
     padding: 20px;
-    
+
     .user-table {
-        flex: 1;
+      flex: 1;
     }
 
     .pagination-container {

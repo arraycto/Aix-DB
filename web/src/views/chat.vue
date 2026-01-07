@@ -4,11 +4,12 @@ import type { InputInst, UploadFileInfo } from 'naive-ui'
 import { UAParser } from 'ua-parser-js'
 import * as GlobalAPI from '@/api'
 import { isMockDevelopment } from '@/config'
+import SideBar from '../components/Navigation/SideBar.vue'
 import DefaultPage from './DefaultPage.vue'
 import FileListItem from './FileListItem.vue'
 import FileUploadManager from './FileUploadManager.vue'
-import SuggestedView from './SuggestedPage.vue'
 
+import SuggestedView from './SuggestedPage.vue'
 import TableModal from './TableModal.vue'
 
 const route = useRoute()
@@ -854,38 +855,6 @@ const handleHistoryClick = async (item: any) => {
 
   onAqtiveChange(item.qa_type, item.chat_id)
 }
-
-// User Popup Logic
-const handleLogout = () => {
-  userStore.logout()
-  setTimeout(() => {
-    router.replace('/login')
-  }, 500)
-}
-
-const handleDataSourceManager = () => {
-  router.push({
-    name: 'DatasourceManager',
-  })
-}
-
-const handleUserManager = () => {
-  router.push({
-    name: 'UserManager',
-  })
-}
-
-const handleKnowledgeManager = () => {
-  router.push({
-    name: 'KnowledgeManager',
-  })
-}
-
-const handleLLMConfig = () => {
-  router.push({
-    name: 'LLMConfig',
-  })
-}
 </script>
 
 <template>
@@ -1009,83 +978,10 @@ const handleLLMConfig = () => {
 
           <!-- Sidebar Footer -->
           <div class="sidebar-footer px-6 py-5 flex items-center justify-between bg-[#F6F6F8] mt-auto">
-            <n-popover
-              trigger="hover"
-              placement="right-end"
-              :show-arrow="false"
-              raw
-              :style="{ padding: 0 }"
-            >
-              <template #trigger>
-                <div class="user-info flex items-center gap-2 cursor-pointer transition-opacity hover:opacity-80">
-                  <!-- Avatar Icon -->
-                  <div class="i-hugeicons:user-circle text-28 text-[#7E6BF2]"></div>
-                </div>
-              </template>
-              <div class="w-[300px] bg-white rounded-xl shadow-lg border border-gray-100 p-4">
-                <!-- User Header -->
-                <div class="flex items-center gap-3 mb-6 bg-gray-50/50 p-2 rounded-lg">
-                  <div class="i-hugeicons:user-circle text-40 text-[#7E6BF2]"></div>
-                  <div class="flex flex-col">
-                    <span class="text-[#333] font-bold text-16">Admin</span>
-                    <span class="text-[#999] text-12">UID: y9no5hmtvo</span>
-                  </div>
-                </div>
-
-                <!-- Action Grid -->
-                <div class="grid grid-cols-3 gap-y-6 gap-x-2 mb-6">
-                  <div
-                    class="flex flex-col items-center gap-2 cursor-pointer group"
-                    @click="handleDataSourceManager"
-                  >
-                    <div class="relative">
-                      <div class="i-hugeicons:database-01 text-20 text-[#666] group-hover:text-[#333] transition-colors"></div>
-                      <div class="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full border border-white"></div>
-                    </div>
-                    <span class="text-12 text-[#666] group-hover:text-[#333]">数据源管理</span>
-                  </div>
-
-                  <div
-                    class="flex flex-col items-center gap-2 cursor-pointer group"
-                    @click="handleUserManager"
-                  >
-                    <div class="relative">
-                      <div class="i-hugeicons:user-group text-20 text-[#666] group-hover:text-[#333] transition-colors"></div>
-                    </div>
-                    <span class="text-12 text-[#666] group-hover:text-[#333]">用户管理</span>
-                  </div>
-
-                  <div
-                    class="flex flex-col items-center gap-2 cursor-pointer group"
-                    @click="handleKnowledgeManager"
-                  >
-                    <div class="relative">
-                      <div class="i-hugeicons:book-open-01 text-20 text-[#666] group-hover:text-[#333] transition-colors"></div>
-                    </div>
-                    <span class="text-12 text-[#666] group-hover:text-[#333]">知识库管理</span>
-                  </div>
-
-                  <div
-                    class="flex flex-col items-center gap-2 cursor-pointer group"
-                    @click="handleLLMConfig"
-                  >
-                    <div class="relative">
-                      <div class="i-hugeicons:cpu text-20 text-[#666] group-hover:text-[#333] transition-colors"></div>
-                    </div>
-                    <span class="text-12 text-[#666] group-hover:text-[#333]">大模型配置</span>
-                  </div>
-                </div>
-
-                <!-- Logout -->
-                <div
-                  class="flex flex-col items-start gap-2 cursor-pointer group mt-4 pt-4 border-t border-gray-100 pl-4"
-                  @click="handleLogout"
-                >
-                  <div class="i-hugeicons:logout-01 text-20 text-red-500 group-hover:text-red-600 transition-colors"></div>
-                  <span class="text-12 text-red-500 group-hover:text-red-600">退出登录</span>
-                </div>
-              </div>
-            </n-popover>
+            <SideBar
+              mode="avatar"
+              theme="light"
+            />
 
             <div
               class="my-space flex items-center gap-2 text-[#6A6A6A] hover:text-[#7E6BF2] cursor-pointer text-[14px] font-normal transition-colors"

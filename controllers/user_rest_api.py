@@ -77,11 +77,13 @@ async def login(request: Request, body: LoginRequest):
     user = await authenticate_user(username, password)
     if user:
         # 如果验证通过，生成 JWT token
-        token = await generate_jwt_token(user["id"], user["userName"])
+        # user["role"] might be None if legacy data, default to 'user'
+        role = user.get("role") or "user"
+        token = await generate_jwt_token(user["id"], user["userName"], role)
         return {"token": token}
     else:
         # 如果验证失败，返回错误信息
-        raise MyException(SysCodeEnum.c_401)
+        raise MyException(SysCodeEnum.c_401, "用户名或密码错误")
 
 
 @bp.post("/query_user_record", name="query_user_record")

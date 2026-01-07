@@ -26,6 +26,7 @@ class TUser(Base):
     userName: Mapped[Optional[str]] = mapped_column(String(200), comment="用户名称")
     password: Mapped[Optional[str]] = mapped_column(String(300), comment="密码")
     mobile: Mapped[Optional[str]] = mapped_column(String(100), comment="手机号")
+    role: Mapped[Optional[str]] = mapped_column(String(20), default="user", comment="角色: admin/user")
     createTime: Mapped[Optional[datetime.datetime]] = mapped_column(TIMESTAMP, comment="创建时间")
     updateTime: Mapped[Optional[datetime.datetime]] = mapped_column(TIMESTAMP, comment="修改时间")
 

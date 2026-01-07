@@ -93,7 +93,7 @@ COMMENT ON COLUMN t_user."createTime" IS '创建时间';
 COMMENT ON COLUMN t_user."updateTime" IS '修改时间';
 
 INSERT INTO t_user (id, "userName", password, mobile, "createTime", "updateTime")
-VALUES (1, 'admin', '123456', NULL, '2024-01-15 15:30:00', '2024-01-15 15:30:00');
+VALUES (1, 'admin', '$2b$12$rmnFss1KlnSgcRKCv/Q8e.cSeK2OpV9qPg.7TFc7QyCAxdJEnEfDK', NULL, '2024-01-15 15:30:00', '2024-01-15 15:30:00');
 
 -- t_user_qa_record definition
 DROP TABLE IF EXISTS t_user_qa_record CASCADE;

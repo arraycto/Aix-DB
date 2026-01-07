@@ -1,9 +1,11 @@
 import * as GlobalAPI from '@/api'
 import * as TransformUtils from '@/components/MarkdownPreview/transform'
 
+import router from '@/router'
+
 const businessStore = useBusinessStore()
 const userStore = useUserStore()
-const router = useRouter()
+// const router = useRouter() // Removed to avoid inject() warning outside setup
 
 type StreamData = {
   dataType: string

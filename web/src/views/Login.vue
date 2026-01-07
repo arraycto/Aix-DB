@@ -96,9 +96,8 @@ const drawLines = (p: Particle, i: number) => {
 
     if (dist < config.connectionDist) {
       ctx.beginPath()
-      // 提取变量，确保不直接在模板字符串中进行复杂计算，虽然这不应该导致 const 错误，但更安全
-      const alpha = 1 - dist / config.connectionDist
-      ctx.strokeStyle = `rgba(${config.color}, ${alpha})`
+      const lineAlpha = 1 - dist / config.connectionDist
+      ctx.strokeStyle = `rgba(${config.color}, ${lineAlpha})`
       ctx.lineWidth = 0.5
       ctx.moveTo(p.x, p.y)
       ctx.lineTo(p2.x, p2.y)
@@ -113,9 +112,8 @@ const drawLines = (p: Particle, i: number) => {
 
   if (mDist < config.mouseDist) {
     ctx.beginPath()
-    // 明确声明变量
-    const alpha = (1 - mDist / config.mouseDist) * 1.5
-    ctx.strokeStyle = `rgba(${config.color}, ${alpha})` // 鼠标连线更亮
+    const mouseAlpha = (1 - mDist / config.mouseDist) * 1.5
+    ctx.strokeStyle = `rgba(${config.color}, ${mouseAlpha})` // 鼠标连线更亮
     ctx.lineWidth = 1
     ctx.moveTo(p.x, p.y)
     ctx.lineTo(mouse.x, mouse.y)

@@ -5,6 +5,7 @@ import traceback
 from datetime import datetime, timedelta
 from typing import List, Any
 
+import bcrypt
 import jwt
 import requests
 from sqlalchemy import text
@@ -19,6 +20,9 @@ from model.serializers import model_to_dict
 from model.schemas import PaginatedResponse
 
 logger = logging.getLogger(__name__)
+
+# 固定盐值，确保相同的密码生成相同的哈希值（注意：生产环境通常建议随机盐值以提高安全性，但根据需求此处固定）
+PASSWORD_SALT = b'$2b$12$rmnFss1KlnSgcRKCv/Q8e.'
 
 pool = get_db_pool()
 
@@ -83,11 +87,25 @@ async def authenticate_user(username, password):
     """验证用户凭据并返回用户信息或 None"""
     with pool.get_session() as session:
         session: Session = session
-        user_dict = model_to_dict(
-            session.query(TUser).filter(TUser.userName == username).filter(TUser.password == password).first()
-        )
-        if user_dict:
-            return user_dict
+        user = session.query(TUser).filter(TUser.userName == username).first()
+        if user and user.password:
+            # 1. 优先尝试使用固定盐值验证
+            try:
+                if bcrypt.hashpw(password.encode('utf-8'), PASSWORD_SALT).decode('utf-8') == user.password:
+                    return model_to_dict(user)
+            except Exception:
+                pass
+
+            # 2. 兼容性验证：尝试标准bcrypt验证 (适用于旧的随机盐值)
+            try:
+                if bcrypt.checkpw(password.encode('utf-8'), user.password.encode('utf-8')):
+                    return model_to_dict(user)
+            except ValueError:
+                pass
+
+            # 3. 兼容性验证：明文密码
+            if user.password == password:
+                return model_to_dict(user)
         return False
     # sql = f"""select * from t_user where userName='{username}' and password='{password}'"""
     # report_dict = MysqlUtil().query_mysql_dict(sql)
@@ -97,11 +115,12 @@ async def authenticate_user(username, password):
     #     return False
 
 
-async def generate_jwt_token(user_id, username):
+async def generate_jwt_token(user_id, username, role="user"):
     """生成 JWT token"""
     payload = {
         "id": str(user_id),
         "username": username,
+        "role": role,
         "exp": datetime.utcnow() + timedelta(hours=24),
     }  # Token 过期时间
     token = jwt.encode(payload, os.getenv("JWT_SECRET_KEY"), algorithm="HS256")
@@ -439,10 +458,10 @@ async def query_user_list(page, size, name=None):
         user_list = []
         for user in users:
             u_dict = model_to_dict(user)
-            if u_dict.get("createTime"):
-                u_dict["createTime"] = u_dict["createTime"].strftime("%Y-%m-%d %H:%M:%S")
-            if u_dict.get("updateTime"):
-                u_dict["updateTime"] = u_dict["updateTime"].strftime("%Y-%m-%d %H:%M:%S")
+            # if u_dict.get("createTime"):
+            #     u_dict["createTime"] = u_dict["createTime"].strftime("%Y-%m-%d %H:%M:%S")
+            # if u_dict.get("updateTime"):
+            #     u_dict["updateTime"] = u_dict["updateTime"].strftime("%Y-%m-%d %H:%M:%S")
             user_list.append(u_dict)
 
         return PaginatedResponse(
@@ -453,12 +472,13 @@ async def query_user_list(page, size, name=None):
         )
 
 
-async def add_user(username, password, mobile):
+async def add_user(username, password, mobile, role="user"):
     """
     添加用户
     :param username: 用户名
     :param password: 密码
     :param mobile: 手机号
+    :param role: 角色
     :return:
     """
     with pool.get_session() as session:
@@ -466,16 +486,56 @@ async def add_user(username, password, mobile):
         if exist:
             raise MyException(SysCodeEnum.PARAM_ERROR, "用户名已存在")
 
+        hashed_password = bcrypt.hashpw(password.encode('utf-8'), PASSWORD_SALT).decode('utf-8')
+
         new_user = TUser(
             userName=username,
-            password=password,
+            password=hashed_password,
             mobile=mobile,
+            role=role,
             createTime=datetime.now(),
             updateTime=datetime.now(),
         )
         session.add(new_user)
         session.commit()
         return True
+
+
+async def init_super_admin():
+    """初始化超级管理员"""
+    admin_name = "admin"
+    # 默认密码，实际应从配置读取或更安全的方式
+    admin_pass = "admin123" 
+    try:
+        with pool.get_session() as session:
+            # 检查是否存在 admin 角色或名为 admin 的用户
+            # 这里简单检查用户名
+            exist = session.query(TUser).filter(TUser.userName == admin_name).first()
+            if not exist:
+                print(f"Initializing super admin: {admin_name}")
+                hashed_password = bcrypt.hashpw(admin_pass.encode('utf-8'), PASSWORD_SALT).decode('utf-8')
+                admin_user = TUser(
+                    userName=admin_name,
+                    password=hashed_password,
+                    mobile="",
+                    role="admin",
+                    createTime=datetime.now(),
+                    updateTime=datetime.now(),
+                )
+                session.add(admin_user)
+                session.commit()
+                print("Super admin initialized.")
+            else:
+                # 确保已存在的 admin 用户有 admin 角色
+                if exist.role != 'admin':
+                    exist.role = 'admin'
+                    session.commit()
+                    print("Updated existing user 'admin' to role 'admin'.")
+                else:
+                    print("Super admin already exists.")
+    except Exception as e:
+        print(f"Failed to init super admin: {e}")
+
 
 
 async def update_user(user_id, username, mobile, password=None):
@@ -500,7 +560,7 @@ async def update_user(user_id, username, mobile, password=None):
         user.userName = username
         user.mobile = mobile
         if password:
-            user.password = password
+            user.password = bcrypt.hashpw(password.encode('utf-8'), PASSWORD_SALT).decode('utf-8')
         user.updateTime = datetime.now()
         session.commit()
         return True
