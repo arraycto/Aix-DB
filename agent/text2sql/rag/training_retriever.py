@@ -121,9 +121,10 @@ async def _select_training_by_question(
         training_ids.add(row.id)
     
     # 2. Embedding 向量检索（如果启用）
+    # 训练数据 embedding 优先使用用户配置的模型，没有则使用离线模型
     if use_embedding:
         try:
-            # 生成问题的 embedding
+            # 生成问题的 embedding（优先使用在线模型，回退到离线模型）
             embedding = await generate_embedding(question)
             
             if embedding:

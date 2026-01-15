@@ -72,7 +72,7 @@ async def create_training(data: Dict[str, Any], oid: int = 1) -> bool:
     if not question:
         raise MyException(SysCodeEnum.PARAM_ERROR, "Question cannot be empty")
 
-    # Generate embedding
+    # Generate embedding - 优先使用用户配置的模型，没有则使用离线模型
     embedding = await generate_embedding(question)
 
     with pool.get_session() as session:
@@ -139,6 +139,7 @@ async def update_training(data: Dict[str, Any], oid: int = 1) -> bool:
 
     embedding = None
     if question and question != current_question:
+        # 优先使用用户配置的模型，没有则使用离线模型
         embedding = await generate_embedding(question)
 
     with pool.get_session() as session:

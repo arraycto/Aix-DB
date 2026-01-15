@@ -1,5 +1,5 @@
 import datetime
-from typing import Optional
+from typing import List, Optional, Union
 
 from sqlalchemy import (
     BigInteger,
@@ -11,6 +11,7 @@ from sqlalchemy import (
     text,
 )
 from sqlalchemy.orm import Mapped, mapped_column
+from pgvector.sqlalchemy import VECTOR
 
 from model.db_connection_pool import Base
 
@@ -129,9 +130,13 @@ class TTerminology(Base):
     create_time: Mapped[Optional[datetime.datetime]] = mapped_column(
         TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"), comment="创建时间"
     )
+    # VECTOR 类型：用于在数据库中进行向量相似度搜索（使用 <=> 操作符）
+    # 不指定维度，支持动态维度（768/1024等），pgvector 会自动处理
+    # Python 类型：List[float] 或 numpy.ndarray，SQLAlchemy 会自动转换
+    embedding: Mapped[Optional[Union[List[float], str]]] = mapped_column(
+        VECTOR, nullable=True, comment="术语向量数据（pgvector VECTOR 类型，支持动态维度）"
+    )
 
-
-from pgvector.sqlalchemy import VECTOR
 
 class TDataTraining(Base):
     __tablename__ = "t_data_training"
@@ -145,6 +150,11 @@ class TDataTraining(Base):
     )
     question: Mapped[Optional[str]] = mapped_column(String(255), comment="问题描述")
     description: Mapped[Optional[str]] = mapped_column(Text, comment="示例SQL")
-    embedding: Mapped[Optional[str]] = mapped_column(VECTOR(1024), comment="向量数据")
+    # VECTOR 类型：用于在数据库中进行向量相似度搜索（使用 <=> 操作符）
+    # 不指定维度，支持动态维度（768/1024等），pgvector 会自动处理
+    # Python 类型：List[float] 或 numpy.ndarray，SQLAlchemy 会自动转换
+    embedding: Mapped[Optional[Union[List[float], str]]] = mapped_column(
+        VECTOR, nullable=True, comment="向量数据（pgvector VECTOR 类型，支持动态维度）"
+    )
     enabled: Mapped[Optional[bool]] = mapped_column(Boolean, default=True, comment="是否启用")
     advanced_application: Mapped[Optional[int]] = mapped_column(BigInteger, comment="高级应用ID")

@@ -240,7 +240,11 @@ class DatasourceService:
 
     @staticmethod
     def _get_embedding_client():
-        """获取 embedding 客户端和模型名称"""
+        """
+        获取 embedding 客户端和模型名称
+        表结构 embedding 支持在线模型和离线模型切换
+        优先使用在线模型，如果没有配置则使用离线模型
+        """
         try:
             db_pool = get_db_pool()
             with db_pool.get_session() as session:
@@ -248,34 +252,34 @@ class DatasourceService:
                 model = session.query(TAiModel).filter(TAiModel.model_type == 2, TAiModel.default_model == True).first()
                 
                 if not model:
-                    # Fallback: 尝试查找任何 embedding 模型
+                    # 尝试查找任何 embedding 模型
                     model = session.query(TAiModel).filter(TAiModel.model_type == 2).first()
                 
-                # Fallback to LLM
                 if not model:
-                    model = session.query(TAiModel).filter(
-                        TAiModel.model_type == 1,
-                        TAiModel.default_model == True
-                    ).first()
-                
-                if not model:
-                    model = session.query(TAiModel).filter(TAiModel.model_type == 1).first()
-                
-                if not model:
-                    logger.warning("未配置嵌入模型，无法计算表 embedding")
+                    logger.info("未配置在线嵌入模型（model_type=2），将使用离线模型计算表 embedding")
                     return None, None
                 
-                base_model = model.base_model
-                if model.model_type == 1 and model.supplier == 1:
-                    base_model = "text-embedding-3-small"
+                # 处理 base_url，确保包含协议前缀
+                base_url = (model.api_domain or "").strip()
+                if not base_url:
+                    logger.warning("表结构 embedding 在线模型的 API Domain 为空，将使用离线模型")
+                    return None, None
+                
+                if not base_url.startswith(("http://", "https://")):
+                    # 本地地址默认 http，其它默认 https
+                    if base_url.startswith(("localhost", "127.0.0.1", "0.0.0.0")):
+                        base_url = f"http://{base_url}"
+                    else:
+                        base_url = f"https://{base_url}"
                 
                 embedding_client = OpenAI(
                     api_key=model.api_key or "empty",
-                    base_url=model.api_domain
+                    base_url=base_url
                 )
-                return embedding_client, base_model
+                logger.info(f"✅ 使用在线模型计算表 embedding: {model.base_model} ({base_url})")
+                return embedding_client, model.base_model
         except Exception as e:
-            logger.error(f"获取 embedding 客户端失败: {e}", exc_info=True)
+            logger.warning(f"获取在线 embedding 客户端失败: {e}，将使用离线模型")
             return None, None
 
     @staticmethod
@@ -323,29 +327,36 @@ class DatasourceService:
             logger.debug(f"表 {table.table_name} 没有 embedding 字段，跳过计算")
             return
         
-        # 获取 embedding 客户端
-        embedding_client, model_name = DatasourceService._get_embedding_client()
-        if not embedding_client or not model_name:
+        # 构建文档文本
+        document = DatasourceService._build_table_document(table, fields)
+        
+        if not document or not document.strip():
+            logger.warning(f"表 {table.table_name} 的文档文本为空，跳过 embedding 计算")
             return
         
+        # 获取 embedding 客户端（支持在线/离线模型切换）
+        embedding_client, model_name = DatasourceService._get_embedding_client()
+        
         try:
-            # 构建文档文本
-            document = DatasourceService._build_table_document(table, fields)
-            
-            if not document or not document.strip():
-                logger.warning(f"表 {table.table_name} 的文档文本为空，跳过 embedding 计算")
-                return
-            
-            # 计算 embedding
-            logger.info(f"计算表 {table.table_name} 的 embedding...")
-            response = embedding_client.embeddings.create(model=model_name, input=document)
-            embedding_vec = response.data[0].embedding
+            if embedding_client and model_name:
+                # 使用在线模型
+                logger.info(f"计算表 {table.table_name} 的 embedding（在线模型: {model_name}）...")
+                response = embedding_client.embeddings.create(model=model_name, input=document)
+                embedding_vec = response.data[0].embedding
+            else:
+                # 使用离线模型
+                logger.info(f"计算表 {table.table_name} 的 embedding（离线模型）...")
+                from common.local_embedding import generate_embedding_local_sync
+                embedding_vec = generate_embedding_local_sync(document)
+                if not embedding_vec:
+                    logger.warning(f"离线模型生成表 {table.table_name} 的 embedding 失败")
+                    return
             
             # 将 embedding 转换为 JSON 字符串并保存
             embedding_json = json.dumps(embedding_vec)
             table.embedding = embedding_json
             
-            logger.info(f"✅ 表 {table.table_name} 的 embedding 计算并保存成功")
+            logger.info(f"✅ 表 {table.table_name} 的 embedding 计算并保存成功（维度: {len(embedding_vec)}）")
             
         except Exception as e:
             logger.error(f"计算表 {table.table_name} 的 embedding 失败: {e}", exc_info=True)
@@ -384,29 +395,48 @@ class DatasourceService:
         if not docs:
             return
 
-        # 获取 embedding 客户端
+        # 获取 embedding 客户端（支持在线/离线模型切换）
         embedding_client, model_name = DatasourceService._get_embedding_client()
-        if not embedding_client or not model_name:
-            return
 
         try:
-            logger.info(f"批量计算 {len(docs)} 个表的 embedding...")
-            response = embedding_client.embeddings.create(model=model_name, input=docs)
-            data = response.data or []
+            if embedding_client and model_name:
+                # 使用在线模型批量计算
+                logger.info(f"批量计算 {len(docs)} 个表的 embedding（在线模型: {model_name}）...")
+                response = embedding_client.embeddings.create(model=model_name, input=docs)
+                data = response.data or []
 
-            if len(data) != len(tables_for_embedding):
-                logger.warning(
-                    f"批量 embedding 返回数量与请求数量不一致: 请求 {len(tables_for_embedding)}, 返回 {len(data)}"
-                )
+                if len(data) != len(tables_for_embedding):
+                    logger.warning(
+                        f"批量 embedding 返回数量与请求数量不一致: 请求 {len(tables_for_embedding)}, 返回 {len(data)}"
+                    )
 
-            for idx, table in enumerate(tables_for_embedding):
-                if idx >= len(data):
-                    break
-                embedding_vec = data[idx].embedding
-                embedding_json = json.dumps(embedding_vec)
-                table.embedding = embedding_json
+                for idx, table in enumerate(tables_for_embedding):
+                    if idx >= len(data):
+                        break
+                    embedding_vec = data[idx].embedding
+                    embedding_json = json.dumps(embedding_vec)
+                    table.embedding = embedding_json
 
-            logger.info("✅ 批量表 embedding 计算并保存成功")
+                logger.info(f"✅ 批量表 embedding 计算并保存成功（维度: {len(data[0].embedding) if data else 'unknown'}）")
+            else:
+                # 使用离线模型逐个计算
+                logger.info(f"批量计算 {len(docs)} 个表的 embedding（离线模型）...")
+                from common.local_embedding import generate_embedding_local_sync
+                
+                success_count = 0
+                for idx, table in enumerate(tables_for_embedding):
+                    try:
+                        embedding_vec = generate_embedding_local_sync(docs[idx])
+                        if embedding_vec:
+                            embedding_json = json.dumps(embedding_vec)
+                            table.embedding = embedding_json
+                            success_count += 1
+                        else:
+                            logger.warning(f"离线模型生成表 {table.table_name} 的 embedding 失败")
+                    except Exception as e:
+                        logger.error(f"生成表 {table.table_name} 的 embedding 失败: {e}")
+                
+                logger.info(f"✅ 批量表 embedding 计算并保存成功（成功: {success_count}/{len(tables_for_embedding)}，维度: 768）")
         except Exception as e:
             logger.error(f"批量计算表 embedding 失败: {e}", exc_info=True)
 

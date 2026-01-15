@@ -1,11 +1,12 @@
 """
 术语检索器
-基于关键词匹配检索术语，格式化为模板所需的 XML 格式
-注意：当前项目的 TTerminology 表没有 embedding 字段，暂时只支持关键词匹配
+基于关键词匹配和 embedding 向量检索术语，格式化为模板所需的 XML 格式
+支持混合检索：关键词匹配 + 向量相似度搜索
 """
 
 import json
 import logging
+import os
 from typing import List, Optional, Dict, Any
 from sqlalchemy import or_, and_, text
 from sqlalchemy.orm import Session
@@ -13,9 +14,15 @@ from sqlalchemy.orm import Session
 from model.db_connection_pool import get_db_pool
 from model.db_models import TTerminology
 from model.datasource_models import Datasource
+from services.embedding_service import generate_embedding
 
 logger = logging.getLogger(__name__)
 pool = get_db_pool()
+
+# 配置参数
+EMBEDDING_TERMINOLOGY_SIMILARITY = float(os.getenv("EMBEDDING_TERMINOLOGY_SIMILARITY", "0.5"))  # 相似度阈值，默认 0.5
+EMBEDDING_TERMINOLOGY_TOP_COUNT = int(os.getenv("EMBEDDING_TERMINOLOGY_TOP_COUNT", "10"))  # 向量检索返回的最大数量
+USE_EMBEDDING = os.getenv("USE_TERMINOLOGY_EMBEDDING", "true").lower() == "true"  # 是否启用 embedding 检索
 
 
 def retrieve_terminologies(
@@ -23,6 +30,7 @@ def retrieve_terminologies(
     datasource_id: Optional[int] = None,
     oid: int = 1,
     top_k: int = 10,
+    use_embedding: bool = True,
 ) -> str:
     """
     检索术语并格式化为模板所需的 XML 格式
@@ -32,6 +40,7 @@ def retrieve_terminologies(
         datasource_id: 数据源ID（可选）
         oid: 组织ID（默认：1）
         top_k: 返回的最大术语数量（默认：10）
+        use_embedding: 是否使用 embedding 向量检索（默认：True）
     
     Returns:
         格式化的术语 XML 字符串，如果没有找到则返回空字符串
@@ -41,14 +50,23 @@ def retrieve_terminologies(
     
     try:
         with pool.get_session() as session:
-            # 查询匹配的术语
-            results = _select_terminology_by_word(
+            # 查询匹配的术语（混合检索：关键词匹配 + embedding 向量检索）
+            # 注意：_select_terminology_by_word 是异步函数，需要在异步环境中调用
+            import asyncio
+            try:
+                loop = asyncio.get_event_loop()
+            except RuntimeError:
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+            
+            results = loop.run_until_complete(_select_terminology_by_word(
                 session=session,
                 word=question,
                 oid=oid,
                 datasource_id=datasource_id,
                 top_k=top_k,
-            )
+                use_embedding=use_embedding and USE_EMBEDDING,
+            ))
             
             if not results or len(results) == 0:
                 return ""
@@ -68,15 +86,16 @@ def retrieve_terminologies(
         return ""
 
 
-def _select_terminology_by_word(
+async def _select_terminology_by_word(
     session: Session,
     word: str,
     oid: int,
     datasource_id: Optional[int] = None,
     top_k: int = 10,
+    use_embedding: bool = True,
 ) -> List[Dict[str, Any]]:
     """
-    通过关键词匹配检索术语
+    通过关键词匹配和 embedding 向量检索术语（混合检索）
     
     Args:
         session: 数据库会话
@@ -84,11 +103,14 @@ def _select_terminology_by_word(
         oid: 组织ID
         datasource_id: 数据源ID（可选）
         top_k: 返回的最大数量
+        use_embedding: 是否使用 embedding 向量检索
     
     Returns:
         术语列表，格式为 [{"words": [...], "description": "..."}, ...]
     """
-    # 查询匹配的术语（关键词匹配）
+    terminology_ids = set()
+    
+    # 1. 关键词匹配
     stmt = session.query(TTerminology).filter(
         and_(
             text(":sentence ILIKE '%' || word || '%'"),
@@ -115,15 +137,85 @@ def _select_terminology_by_word(
         )
     
     # 执行查询
-    results = stmt.params(sentence=word).limit(top_k * 2).all()  # 多查一些，因为要去重
+    keyword_results = stmt.params(sentence=word).limit(top_k * 2).all()  # 多查一些，因为要去重
     
-    # 收集术语ID（包含父节点和子节点）
-    terminology_ids = set()
-    for term in results:
+    # 收集关键词匹配的术语ID（包含父节点和子节点）
+    for term in keyword_results:
         if term.pid is not None:
             terminology_ids.add(term.pid)
         else:
             terminology_ids.add(term.id)
+    
+    # 2. Embedding 向量检索（如果启用）
+    # 术语 embedding 优先使用用户配置的模型，没有则使用离线模型
+    if use_embedding:
+        try:
+            # 生成查询的 embedding（优先使用在线模型，回退到离线模型）
+            embedding = await generate_embedding(word)
+            
+            if embedding:
+                # 使用 pgvector 的 <=> 操作符计算余弦距离
+                # 相似度 = 1 - 余弦距离
+                # 将 embedding 列表转换为字符串格式（PostgreSQL vector 格式）
+                embedding_str = "[" + ",".join(map(str, embedding)) + "]"
+                
+                # 构建 SQL 查询（根据是否有数据源筛选使用不同的 SQL）
+                if datasource_id is not None:
+                    embedding_sql = text(f"""
+                        SELECT id, pid, word, similarity
+                        FROM (
+                            SELECT id, pid, word, oid, specific_ds, datasource_ids, enabled,
+                                   (1 - (embedding <=> CAST(:embedding_array AS vector))) AS similarity
+                            FROM t_terminology
+                        ) TEMP
+                        WHERE similarity > {EMBEDDING_TERMINOLOGY_SIMILARITY} 
+                          AND oid = :oid 
+                          AND enabled = true
+                          AND (
+                              (specific_ds = false OR specific_ds IS NULL)
+                              OR
+                              (specific_ds = true AND datasource_ids IS NOT NULL 
+                               AND datasource_ids::jsonb @> jsonb_build_array(:datasource))
+                          )
+                        ORDER BY similarity DESC
+                        LIMIT {EMBEDDING_TERMINOLOGY_TOP_COUNT}
+                    """)
+                    params = {
+                        "embedding_array": embedding_str,
+                        "oid": oid,
+                        "datasource": datasource_id,
+                    }
+                else:
+                    embedding_sql = text(f"""
+                        SELECT id, pid, word, similarity
+                        FROM (
+                            SELECT id, pid, word, oid, specific_ds, datasource_ids, enabled,
+                                   (1 - (embedding <=> CAST(:embedding_array AS vector))) AS similarity
+                            FROM t_terminology
+                        ) TEMP
+                        WHERE similarity > {EMBEDDING_TERMINOLOGY_SIMILARITY} 
+                          AND oid = :oid 
+                          AND enabled = true
+                          AND (specific_ds = false OR specific_ds IS NULL)
+                        ORDER BY similarity DESC
+                        LIMIT {EMBEDDING_TERMINOLOGY_TOP_COUNT}
+                    """)
+                    params = {
+                        "embedding_array": embedding_str,
+                        "oid": oid,
+                    }
+                
+                embedding_results = session.execute(embedding_sql, params).fetchall()
+                
+                # 收集向量检索的术语ID（包含父节点和子节点）
+                for row in embedding_results:
+                    if row.pid is not None:
+                        terminology_ids.add(row.pid)
+                    else:
+                        terminology_ids.add(row.id)
+                        
+        except Exception as e:
+            logger.warning(f"Embedding 检索失败，仅使用关键词匹配: {e}")
     
     if len(terminology_ids) == 0:
         return []

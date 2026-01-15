@@ -5,6 +5,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from functools import wraps
 
+import numpy as np
 from pydantic import BaseModel
 from sanic import response
 
@@ -14,7 +15,7 @@ from constants.code_enum import SysCodeEnum
 
 class CustomJSONEncoder(json.JSONEncoder):
     """
-    自定义的 JSON 编码器，用于处理日期类型
+    自定义的 JSON 编码器，用于处理日期类型、numpy 数组等
     """
 
     def default(self, obj):
@@ -35,6 +36,14 @@ class CustomJSONEncoder(json.JSONEncoder):
         elif isinstance(obj, BaseModel):
             # 处理 Pydantic 模型
             return obj.model_dump()
+        elif isinstance(obj, (np.ndarray, np.generic)):
+            # 处理 numpy 数组和标量
+            # 对于 embedding 字段，通常不需要返回给前端，返回 None
+            # 如果需要返回，可以转换为列表：return obj.tolist()
+            return None
+        elif hasattr(obj, 'tolist'):
+            # 处理其他可以转换为列表的对象（如 numpy 数组）
+            return obj.tolist()
         return super().default(obj)
 
 

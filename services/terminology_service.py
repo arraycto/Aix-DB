@@ -1,9 +1,10 @@
 import json
 import logging
+import os
 from datetime import datetime
 from typing import List, Optional
 
-from sqlalchemy import or_, text, desc
+from sqlalchemy import or_, text, desc, update
 from sqlalchemy.orm import Session
 from langchain_core.messages import HumanMessage
 
@@ -12,12 +13,16 @@ from constants.code_enum import SysCodeEnum
 from common.llm_util import get_llm
 from model import Datasource
 from model.db_connection_pool import get_db_pool
-from model.db_models import TTerminology
+from model.db_models import TTerminology, TAiModel
 from model.serializers import model_to_dict
 from model.schemas import PaginatedResponse
+from services.embedding_service import get_default_embedding_model
 
 logger = logging.getLogger(__name__)
 pool = get_db_pool()
+
+# 是否启用 embedding 功能
+EMBEDDING_ENABLED = os.getenv("EMBEDDING_ENABLED", "true").lower() == "true"
 
 
 async def query_terminology_list(page: int, size: int, word: Optional[str] = None, dslist: Optional[List[int]] = None):
@@ -73,6 +78,10 @@ async def query_terminology_list(page: int, size: int, word: Optional[str] = Non
         result_list = []
         for record in records:
             item = model_to_dict(record)
+            
+            # 排除 embedding 字段（前端不需要，且可能包含 numpy 数组）
+            if 'embedding' in item:
+                del item['embedding']
             
             # 查询子节点（同义词）
             children = session.query(TTerminology).filter(TTerminology.pid == record.id).all()
@@ -138,6 +147,15 @@ async def create_terminology(word: str, description: str, other_words: List[str]
             session.add(child)
             
         session.commit()
+        
+        # 计算并保存 embedding（异步处理，不阻塞）
+        if EMBEDDING_ENABLED:
+            try:
+                await save_terminology_embeddings([parent.id])
+            except Exception as e:
+                logger.warning(f"保存术语 embedding 失败: {e}", exc_info=True)
+                # 不抛出异常，避免影响创建流程
+        
         return True
 
 async def update_terminology(id: int, word: str, description: str, other_words: List[str], specific_ds: bool, datasource_ids: List[int], oid: int = 1):
@@ -182,6 +200,15 @@ async def update_terminology(id: int, word: str, description: str, other_words: 
             session.add(child)
             
         session.commit()
+        
+        # 计算并保存 embedding（异步处理，不阻塞）
+        if EMBEDDING_ENABLED:
+            try:
+                await save_terminology_embeddings([id])
+            except Exception as e:
+                logger.warning(f"保存术语 embedding 失败: {e}", exc_info=True)
+                # 不抛出异常，避免影响更新流程
+        
         return True
 
 async def delete_terminology(ids: List[int]):
@@ -205,6 +232,10 @@ async def get_terminology_detail(id: int):
             return None
             
         item = model_to_dict(record)
+        
+        # 排除 embedding 字段（前端不需要，且可能包含 numpy 数组）
+        if 'embedding' in item:
+            del item['embedding']
         
         # 查询子节点
         children = session.query(TTerminology).filter(TTerminology.pid == record.id).all()
@@ -264,3 +295,157 @@ async def generate_synonyms_by_llm(word: str) -> List[str]:
         if "No default AI model" in str(e):
              raise MyException(SysCodeEnum.PARAM_ERROR, "未配置默认AI模型，请先在模型管理中配置")
         raise MyException(SysCodeEnum.c_9999, f"AI生成失败: {str(e)}")
+
+
+def _save_terminology_embeddings_sync(ids: List[int]):
+    """
+    同步版本：计算并保存术语的 embedding（在后台线程中执行）
+    
+    Args:
+        ids: 术语ID列表（父节点ID），会自动处理子节点
+    """
+    if not EMBEDDING_ENABLED:
+        return
+    
+    if not ids or len(ids) == 0:
+        return
+    
+    try:
+        with pool.get_session() as session:
+            # 查询术语及其子节点（所有需要计算 embedding 的术语）
+            # 使用 or_(id.in_(ids), pid.in_(ids)) 查询父节点和所有子节点
+            terminology_list = session.query(TTerminology).filter(
+                or_(TTerminology.id.in_(ids), TTerminology.pid.in_(ids))
+            ).all()
+            
+            if not terminology_list:
+                return
+            
+            # 收集所有术语的 word（用于批量生成 embedding）
+            words_list = [term.word for term in terminology_list if term.word]
+            
+            if not words_list:
+                return
+            
+            logger.info(f"开始计算 {len(words_list)} 个术语的 embedding（父节点和子节点）...")
+            
+            # 批量生成 embedding（优先使用用户配置的模型，没有则使用离线模型）
+            # 术语 embedding 存储在 pgvector 中
+            embeddings = []
+            try:
+                # 尝试获取在线模型配置（同步方式）
+                model_config = None
+                try:
+                    import asyncio
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+                    model_config = loop.run_until_complete(get_default_embedding_model())
+                    loop.close()
+                except Exception as e:
+                    logger.debug(f"获取在线模型配置失败: {e}，将使用离线模型")
+                
+                if model_config:
+                    # 使用在线模型逐个生成（在线模型通常不支持批量）
+                    from openai import OpenAI
+                    
+                    # 处理 Ollama 特殊格式
+                    base_url = model_config["api_domain"]
+                    if model_config["supplier"] == 3:  # Ollama
+                        if not base_url.endswith("/v1"):
+                            base_url = f"{base_url.rstrip('/')}/v1"
+                    
+                    client = OpenAI(
+                        api_key=model_config["api_key"] or "empty",
+                        base_url=base_url
+                    )
+                    
+                    embeddings = []
+                    for word in words_list:
+                        try:
+                            response = client.embeddings.create(model=model_config["base_model"], input=word)
+                            if response.data:
+                                embeddings.append(response.data[0].embedding)
+                            else:
+                                embeddings.append(None)
+                        except Exception as e:
+                            logger.warning(f"在线模型生成术语 '{word}' 的 embedding 失败: {e}，跳过")
+                            embeddings.append(None)
+                    
+                    success_count = sum(1 for e in embeddings if e is not None)
+                    logger.info(f"✅ 使用在线模型生成 {success_count}/{len(words_list)} 个术语 embedding")
+                else:
+                    # 使用离线模型批量生成
+                    from common.local_embedding import _get_local_embedding_model
+                    local_model = _get_local_embedding_model()
+                    
+                    if not local_model:
+                        logger.error("❌ 本地 embedding 模型不可用，无法计算术语 embedding")
+                        return
+                    
+                    # 使用本地模型的批量方法
+                    if hasattr(local_model, 'embed_documents'):
+                        embeddings = local_model.embed_documents(words_list)
+                        logger.info(f"✅ 使用离线模型批量生成 {len(embeddings)} 个术语 embedding（维度: 768）")
+                    else:
+                        # 如果没有 embed_documents，逐个生成
+                        from common.local_embedding import generate_embedding_local_sync
+                        embeddings = [generate_embedding_local_sync(word) for word in words_list]
+                        logger.info(f"✅ 使用离线模型逐个生成 {len(embeddings)} 个术语 embedding（维度: 768）")
+                        
+            except Exception as e:
+                logger.error(f"批量生成术语 embedding 失败: {e}", exc_info=True)
+                return
+            
+            # 逐个更新到数据库（每个更新单独 commit，避免一个失败影响其他）
+            success_count = 0
+            for index in range(len(terminology_list)):
+                if index < len(embeddings) and embeddings[index] is not None:
+                    term = terminology_list[index]
+                    try:
+                        stmt = update(TTerminology).where(
+                            TTerminology.id == term.id
+                        ).values(embedding=embeddings[index])
+                        session.execute(stmt)
+                        session.commit()  # 每个更新单独 commit
+                        success_count += 1
+                        logger.debug(f"✅ 成功更新术语 {term.id} ({term.word}) 的 embedding")
+                    except Exception as e:
+                        error_msg = str(e)
+                        # 检查是否是维度不匹配错误
+                        if "expected" in error_msg and "dimensions" in error_msg:
+                            logger.error(
+                                f"❌ 术语 {term.id} ({term.word}) 的 embedding 维度不匹配: {e}。"
+                            )
+                        else:
+                            logger.error(f"更新术语 {term.id} ({term.word}) 的 embedding 失败: {e}")
+                        # 回滚当前事务，继续处理下一个
+                        try:
+                            session.rollback()
+                        except:
+                            pass
+                        # 继续处理下一个，不中断
+            
+            logger.info(f"✅ 成功保存 {success_count}/{len(terminology_list)} 个术语的 embedding")
+            
+    except Exception as e:
+        logger.error(f"保存术语 embedding 失败: {e}", exc_info=True)
+        # 不抛出异常，避免影响主流程
+
+
+async def save_terminology_embeddings(ids: List[int]):
+    """
+    异步包装：在后台线程中执行 embedding 计算和保存
+    
+    Args:
+        ids: 术语ID列表（父节点ID），会自动处理子节点
+    """
+    if not EMBEDDING_ENABLED:
+        return
+    
+    if not ids or len(ids) == 0:
+        return
+    
+    # 在后台线程中执行，不阻塞主流程
+    import asyncio
+    loop = asyncio.get_event_loop()
+    await loop.run_in_executor(None, _save_terminology_embeddings_sync, ids)

@@ -1,5 +1,9 @@
 import os
 
+# 避免本地向量/Embedding 库重复初始化 OpenMP 导致崩溃或卡死
+# 参考错误: "OMP: Error #15: Initializing libomp.dylib, but found libomp.dylib already initialized."
+os.environ.setdefault("KMP_DUPLICATE_LIB_OK", "TRUE")
+
 from sanic import Sanic
 from sanic.response import empty
 

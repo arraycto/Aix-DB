@@ -218,7 +218,8 @@ CREATE TABLE IF NOT EXISTS t_terminology (
     specific_ds BOOLEAN DEFAULT FALSE,
     datasource_ids TEXT,
     enabled BOOLEAN DEFAULT TRUE,
-    create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    embedding VECTOR
 );
 
 COMMENT ON TABLE t_terminology IS '术语配置表';
@@ -230,6 +231,7 @@ COMMENT ON COLUMN t_terminology.specific_ds IS '是否指定数据源';
 COMMENT ON COLUMN t_terminology.datasource_ids IS '数据源ID列表(JSON)';
 COMMENT ON COLUMN t_terminology.enabled IS '是否启用';
 COMMENT ON COLUMN t_terminology.create_time IS '创建时间';
+COMMENT ON COLUMN t_terminology.embedding IS '术语向量数据（pgvector VECTOR 类型，支持动态维度）';
 
 DROP TABLE IF EXISTS t_data_training CASCADE;
 CREATE TABLE t_data_training (

@@ -51,33 +51,37 @@ CACHE_TTL = int(os.getenv("TABLE_INFO_CACHE_TTL", "300"))  # 缓存有效期（�
 
 # 嵌入模型配置
 def get_embedding_model_config():
+    """
+    获取嵌入模型配置
+    只查找 Embedding 类型的模型（model_type=2），不回退到 LLM
+    如果没有配置，返回 None（将使用离线模型）
+    """
     with db_pool.get_session() as session:
         # model_type: 2 -> Embedding
         model = session.query(TAiModel).filter(TAiModel.model_type == 2, TAiModel.default_model == True).first()
-
+        
         if not model:
-            # Fallback or raise error?
-            # Trying to find ANY embedding model if default not set
+            # 尝试查找任何 embedding 模型
             model = session.query(TAiModel).filter(TAiModel.model_type == 2).first()
         
-        # Fallback to LLM
         if not model:
-            model = session.query(TAiModel).filter(
-                TAiModel.model_type == 1,
-                TAiModel.default_model == True
-            ).first()
-            
-        if not model:
-             model = session.query(TAiModel).filter(TAiModel.model_type == 1).first()
-
-        if not model:
-            raise ValueError("未配置嵌入模型 (Embedding Model) 且无可用大模型")
-            
-        base_model = model.base_model
-        if model.model_type == 1 and model.supplier == 1:
-             base_model = "text-embedding-3-small"
-
-        return {"name": base_model, "api_key": model.api_key, "base_url": model.api_domain}
+            # 没有找到在线模型，返回 None（将使用离线模型）
+            return None
+        
+        # 处理 base_url，确保包含协议前缀
+        base_url = (model.api_domain or "").strip()
+        if not base_url:
+            logger.warning("表结构检索使用的 embedding 模型 API Domain 为空，将使用离线模型")
+            return None
+        
+        if not base_url.startswith(("http://", "https://")):
+            # 本地地址默认 http，其它默认 https
+            if base_url.startswith(("localhost", "127.0.0.1", "0.0.0.0")):
+                base_url = f"http://{base_url}"
+            else:
+                base_url = f"https://{base_url}"
+        
+        return {"name": model.base_model, "api_key": model.api_key, "base_url": base_url}
 
 
 # 重排模型配置
@@ -135,13 +139,24 @@ class DatabaseService:
         self.USE_RERANKER: bool = True  # 是否启用重排序器
 
         # Initialize clients lazily or now
-        try:
-            emb_config = get_embedding_model_config()
-            self.embedding_model_name = emb_config["name"]
-            self.embedding_client = OpenAI(api_key=emb_config["api_key"] or "empty", base_url=emb_config["base_url"])
-        except Exception as e:
-            logger.error(f"初始化嵌入模型失败: {e}")
+        emb_config = get_embedding_model_config()
+        if emb_config:
+            # 使用在线 embedding 模型
+            try:
+                self.embedding_model_name = emb_config["name"]
+                self.embedding_client = OpenAI(api_key=emb_config["api_key"] or "empty", base_url=emb_config["base_url"])
+                self.use_local_embedding = False
+                logger.info(f"✅ 使用在线 embedding 模型: {self.embedding_model_name}")
+            except Exception as e:
+                logger.error(f"初始化在线嵌入模型失败: {e}，将使用离线模型")
+                self.embedding_client = None
+                self.use_local_embedding = True
+        else:
+            # 没有配置在线模型，使用离线模型
+            logger.info("未配置在线 embedding 模型，将使用离线 CPU 模型")
             self.embedding_client = None
+            self.embedding_model_name = None
+            self.use_local_embedding = True
 
         try:
             rerank_config = get_rerank_model_config()
@@ -415,16 +430,49 @@ class DatabaseService:
 
     def _create_embeddings_with_dashscope(self, texts: List[str]) -> np.ndarray:
         """
-        使用 DashScope API 生成文本嵌入向量。
+        生成文本嵌入向量。
+        优先使用在线模型，如果没有配置则使用离线模型。
 
         注意：该方法不在在线检索路径中调用，仅用于离线预计算工具
         或强制重建索引等管理场景中使用。
         """
-        if not self.embedding_client:
-            logger.error("❌ 嵌入模型未初始化")
-            return np.array([])
-
-        logger.info(f"🌐 调用嵌入模型 {self.embedding_model_name}...")
+        if self.use_local_embedding or not self.embedding_client:
+            # 使用离线模型
+            from common.local_embedding import generate_embedding_local_sync
+            logger.info("🖥️ 使用离线 CPU 模型生成 embedding...")
+            start_time = time.time()
+            embeddings = []
+            embedding_dim = None  # 动态获取维度
+            
+            for doc in texts:
+                try:
+                    embedding = generate_embedding_local_sync(doc)
+                    if embedding:
+                        if embedding_dim is None:
+                            embedding_dim = len(embedding)
+                        embeddings.append(embedding)
+                    else:
+                        logger.warning(f"⚠️ 离线模型生成 embedding 失败 ({doc[:30]}...)，使用零向量")
+                        if embedding_dim is None:
+                            embedding_dim = 768  # 默认维度
+                        embeddings.append([0.0] * embedding_dim)
+                except Exception as e:
+                    logger.error(f"❌ 离线模型嵌入生成失败 ({doc[:30]}...): {e}")
+                    if embedding_dim is None:
+                        embedding_dim = 768  # 默认维度
+                    embeddings.append([0.0] * embedding_dim)
+            
+            if not embeddings:
+                logger.error("❌ 所有 embedding 生成都失败")
+                return np.array([])
+            
+            embeddings = np.array(embeddings).astype("float32")
+            faiss.normalize_L2(embeddings)
+            logger.info(f"✅ 离线模型嵌入生成完成，耗时 {time.time() - start_time:.2f}s，维度: {embedding_dim}")
+            return embeddings
+        
+        # 使用在线模型
+        logger.info(f"🌐 调用在线嵌入模型 {self.embedding_model_name}...")
         start_time = time.time()
         embeddings = []
         for doc in texts:
@@ -432,12 +480,12 @@ class DatabaseService:
                 response = self.embedding_client.embeddings.create(model=self.embedding_model_name, input=doc)
                 embeddings.append(response.data[0].embedding)
             except Exception as e:
-                logger.error(f"❌ 嵌入生成失败 ({doc[:30]}...): {e}")
+                logger.error(f"❌ 在线模型嵌入生成失败 ({doc[:30]}...): {e}")
                 embeddings.append(np.zeros(1024))  # 占位符
 
         embeddings = np.array(embeddings).astype("float32")
         faiss.normalize_L2(embeddings)
-        logger.info(f"✅ 嵌入生成完成，耗时 {time.time() - start_time:.2f}s")
+        logger.info(f"✅ 在线模型嵌入生成完成，耗时 {time.time() - start_time:.2f}s")
         return embeddings
 
     def _initialize_vector_index(self, table_info: Dict[str, Dict]):
@@ -497,19 +545,43 @@ class DatabaseService:
     def _retrieve_by_vector(self, query: str, top_k: int = 10) -> List[int]:
         """
         使用向量相似度检索最相关的表。
+        优先使用在线模型，如果没有配置则使用离线模型。
         """
-        if not self.embedding_client or not self._faiss_index:
-            logger.error("❌ 向量检索服务不可用")
+        if not self._faiss_index:
+            logger.error("❌ 向量索引未初始化")
             return []
 
         try:
-            response = self.embedding_client.embeddings.create(model=self.embedding_model_name, input=query)
-            query_vec = np.array([response.data[0].embedding]).astype("float32")
+            # 生成查询向量
+            if self.use_local_embedding or not self.embedding_client:
+                # 使用离线模型
+                from common.local_embedding import generate_embedding_local_sync
+                embedding = generate_embedding_local_sync(query)
+                if not embedding:
+                    logger.warning("⚠️ 离线模型生成 embedding 失败，跳过向量检索")
+                    return []
+                query_vec = np.array([embedding]).astype("float32")
+            else:
+                # 使用在线模型
+                response = self.embedding_client.embeddings.create(model=self.embedding_model_name, input=query)
+                query_vec = np.array([response.data[0].embedding]).astype("float32")
+            
+            # 检查维度是否匹配
+            query_dim = query_vec.shape[1]
+            index_dim = self._faiss_index.d
+            if query_dim != index_dim:
+                logger.error(
+                    f"❌ 向量维度不匹配：查询向量维度={query_dim}，索引维度={index_dim}。"
+                    f"这可能是因为索引使用的是在线模型的 embedding，而查询使用的是离线模型。"
+                    f"建议：重新计算表的 embedding 或使用相同的模型。"
+                )
+                return []
+            
             faiss.normalize_L2(query_vec)
             _, indices = self._faiss_index.search(query_vec, top_k)
             return indices[0].tolist()
         except Exception as e:
-            logger.error(f"❌ 向量检索失败: {e}")
+            logger.error(f"❌ 向量检索失败: {e}", exc_info=True)
             return []
 
     def _retrieve_by_bm25(self, table_info: Dict[str, Dict], user_query: str) -> List[int]:

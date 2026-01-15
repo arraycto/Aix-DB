@@ -12,57 +12,31 @@ pool = get_db_pool()
 
 
 async def get_default_embedding_model():
-    """Get the default embedding model configuration"""
+    """
+    获取默认的 embedding 模型配置
+    只查找 Embedding 类型的模型（model_type=2），不回退到 LLM
+    """
     with pool.get_session() as session:
-        # Try to find a default embedding model (model_type=2)
+        # 优先查找默认的 embedding 模型 (model_type=2)
         model = session.query(TAiModel).filter(
             TAiModel.model_type == 2,
             TAiModel.default_model == True
         ).first()
 
-        # If no default, pick the first available embedding model
+        # 如果没有默认的，查找任何可用的 embedding 模型
         if not model:
             model = session.query(TAiModel).filter(TAiModel.model_type == 2).first()
-        
-        # If still no embedding model, try to use a default LLM (model_type=1) as fallback
-        if not model:
-            model = session.query(TAiModel).filter(
-                TAiModel.model_type == 1,
-                TAiModel.default_model == True
-            ).first()
-            
-        # If no default LLM, pick first available LLM
-        if not model:
-             model = session.query(TAiModel).filter(TAiModel.model_type == 1).first()
 
+        # 如果找到了 embedding 模型，返回配置
         if model:
-            # For LLM fallback, we might need to adjust base_model or assume it supports embedding
-            # Or we just use it as is, hoping it supports embedding endpoint.
-            # Usually LLMs like GPT-4 don't support embedding on same model name, but some do (like Ollama).
-            # If using OpenAI LLM for embedding, we should probably switch model name to text-embedding-ada-002 if possible?
-            # But requirement says "use LLM as fallback", implying use the LLM config.
-            # However, `client.embeddings.create` requires an embedding model name.
-            # If it's OpenAI, we might default to `text-embedding-3-small` if not specified?
-            # But `model.base_model` will be e.g. `gpt-4`. `gpt-4` cannot do embeddings.
-            
-            # Let's check supplier. 
-            # If supplier=1 (OpenAI), and we are falling back to LLM config, we should probably force a standard embedding model name
-            # if the current model name is a chat model.
-            
-            base_model = model.base_model
-            if model.model_type == 1:
-                if model.supplier == 1: # OpenAI
-                     base_model = "text-embedding-3-small" # Fallback for OpenAI
-                # For Ollama (3), usually we need a specific embedding model too, but maybe user has one?
-                # If we use LLM config, we just return it. 
-                # User said "use large model as fallback".
-            
             return {
                 "supplier": model.supplier,
                 "api_key": model.api_key,
                 "api_domain": model.api_domain,
-                "base_model": base_model
+                "base_model": model.base_model
             }
+        
+        # 没有配置 embedding 模型，返回 None（将使用离线模型）
         return None
 
 
@@ -72,13 +46,31 @@ async def generate_embedding(text: str) -> Optional[List[float]]:
         return None
 
     model = await get_default_embedding_model()
+    
+    # 如果没有配置 embedding 模型，使用离线本地模型
     if not model:
-        logger.warning("No embedding model configured. Skipping embedding generation.")
-        return None
+        logger.info("No embedding model configured, falling back to local CPU model")
+        from common.local_embedding import generate_embedding_local
+        return await generate_embedding_local(text)
 
     try:
         api_key = model["api_key"] or "empty"
-        base_url = model["api_domain"]
+        base_url = model.get("api_domain") or ""
+
+        # 验证 base_url 是否有效
+        if not base_url or not base_url.strip():
+            logger.warning("API domain is empty, falling back to local CPU model")
+            from common.local_embedding import generate_embedding_local
+            return await generate_embedding_local(text)
+
+        # 确保 base_url 包含协议前缀
+        base_url = base_url.strip()
+        if not base_url.startswith(("http://", "https://")):
+            # 默认使用 https，如果是本地地址则使用 http
+            if base_url.startswith(("localhost", "127.0.0.1", "0.0.0.0")):
+                base_url = f"http://{base_url}"
+            else:
+                base_url = f"https://{base_url}"
 
         # Special handling for Ollama to ensure OpenAI compatibility
         if model["supplier"] == 3:  # Ollama
@@ -94,7 +86,9 @@ async def generate_embedding(text: str) -> Optional[List[float]]:
 
     except Exception as e:
         traceback.print_exc()
-        logger.error(f"Failed to generate embedding: {e}")
-        return None
+        logger.warning(f"Failed to generate embedding with online model: {e}, falling back to local CPU model")
+        # 在线模型失败时，回退到本地模型
+        from common.local_embedding import generate_embedding_local
+        return await generate_embedding_local(text)
 
     return None

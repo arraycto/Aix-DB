@@ -13,6 +13,7 @@ const LLMConfig = defineAsyncComponent(() => import('@/views/system/config/llm-c
 const PermissionConfig = defineAsyncComponent(() => import('@/views/system/permission/permission-list.vue'))
 const TerminologyConfig = defineAsyncComponent(() => import('@/views/system/config/terminology-config.vue'))
 const SqlExampleLibrary = defineAsyncComponent(() => import('@/views/system/config/sql-example-library.vue'))
+const EmbeddingMigration = defineAsyncComponent(() => import('@/views/system/config/embedding-migration.vue'))
 
 const menuItems = [
   { key: 'datasource', label: '库表配置', icon: 'i-material-symbols:database-outline' },
@@ -21,6 +22,7 @@ const menuItems = [
   { key: 'permission', label: '权限配置', icon: 'i-material-symbols:lock-outline' },
   { key: 'terminology', label: '术语配置', icon: 'i-material-symbols:book-outline' },
   { key: 'sql', label: 'SQL示例', icon: 'i-material-symbols:code' },
+  { key: 'embedding', label: '数据迁移', icon: 'i-material-symbols:sync' },
 ]
 
 const toggleSidebar = () => {
@@ -138,6 +140,13 @@ const handleBack = () => {
         class="h-full"
       >
         <SqlExampleLibrary />
+      </div>
+
+      <div
+        v-else-if="activeTab === 'embedding'"
+        class="h-full"
+      >
+        <EmbeddingMigration />
       </div>
     </div>
   </div>
