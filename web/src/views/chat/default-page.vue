@@ -200,19 +200,13 @@ const bottomIcons = [
       <div class="header-section">
         <div class="logo-wrapper">
           <div class="page-title">
-            <span
-              class="gradient-text"
-              style="background-image: linear-gradient(270deg, rgb(130, 45, 255) 0%, rgb(62, 69, 255) 20.8827%, rgb(60, 196, 250) 100%); background-clip: text; -webkit-text-fill-color: transparent;"
-            >A</span>
-            <span
-              class="gradient-text i-container"
-              style="background-image: linear-gradient(270deg, rgb(130, 45, 255) 0%, rgb(62, 69, 255) 20.8827%, rgb(60, 196, 250) 100%); background-clip: text; -webkit-text-fill-color: transparent;"
-            >
+            <span class="gradient-text">A</span>
+            <span class="gradient-text i-container">
               i
               <svg
                 class="star-icon"
-                width="14"
-                height="14"
+                width="20"
+                height="20"
                 viewBox="0 0 16 16"
                 fill="none"
                 xmlns="http://www.w3.org/2000/svg"
@@ -227,15 +221,15 @@ const bottomIcons = [
                   >
                     <stop
                       offset="0%"
-                      stop-color="rgba(130,45,255,1)"
+                      stop-color="#822dff"
                     />
                     <stop
-                      offset="20.88%"
-                      stop-color="rgba(62,69,255,1)"
+                      offset="50%"
+                      stop-color="#3e45ff"
                     />
                     <stop
                       offset="100%"
-                      stop-color="rgba(60,196,250,1)"
+                      stop-color="#3ec4fa"
                     />
                   </linearGradient>
                 </defs>
@@ -245,10 +239,7 @@ const bottomIcons = [
                 />
               </svg>
             </span>
-            <span
-              class="gradient-text"
-              style="background-image: linear-gradient(270deg, rgb(130, 45, 255) 0%, rgb(62, 69, 255) 20.8827%, rgb(60, 196, 250) 100%); background-clip: text; -webkit-text-fill-color: transparent;"
-            >X</span>
+            <span class="gradient-text">x</span>
           </div>
         </div>
       </div>
@@ -452,29 +443,47 @@ const bottomIcons = [
   position: relative;
   display: inline-flex;
   align-items: center;
-  font-size: 48px;
-  font-weight: bold;
+  font-size: 72px;
+  font-weight: 800;
   line-height: 1;
-  height: 68px;
+  height: auto;
   margin: 0;
-  letter-spacing: normal;
-  font-family: Arial, sans-serif;
+  letter-spacing: -0.04em;
+  font-family: "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
+}
+
+.gradient-text {
+  background: linear-gradient(135deg, #822dff 0%, #3e45ff 50%, #3ec4fa 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  position: relative;
+  z-index: 1;
 }
 
 .i-container {
   position: relative;
-  display: inline-block;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  margin: 0 2px;
 }
 
 .star-icon {
   position: absolute;
-  top: -16px;
-  left: 50%;
-  transform: translateX(-50%);
-  pointer-events: none;
+  top: -12px;
+  right: -8px;
+  left: auto;
+  transform: rotate(15deg);
+  filter: drop-shadow(0 0 8px rgba(130, 45, 255, 0.4));
+  animation: float 3s ease-in-out infinite;
+}
+
+@keyframes float {
+  0%, 100% { transform: rotate(15deg) translateY(0); }
+  50% { transform: rotate(15deg) translateY(-3px); }
 }
 
 /* 模型下拉框样式，使用 Naive UI Dropdown 风格 */
