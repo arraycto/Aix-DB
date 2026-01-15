@@ -125,6 +125,29 @@ export async function delete_user_record(ids) {
 }
 
 /**
+ * 获取记录SQL语句
+ * @param record_id
+ * @returns
+ */
+export async function get_record_sql(record_id) {
+  const userStore = useUserStore()
+  const token = userStore.getUserToken()
+  const url = new URL(`${location.origin}/sanic/user/get_record_sql`)
+  const req = new Request(url, {
+    mode: 'cors',
+    method: 'post',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`,
+    },
+    body: JSON.stringify({
+      record_id,
+    }),
+  })
+  return fetch(req)
+}
+
+/**
  * 用户反馈
  * @param chat_id
  * @param rating

@@ -86,11 +86,21 @@ async def update_model(model_id: int, data: dict) -> bool:
         if not model:
             raise MyException(SysCodeEnum.PARAM_ERROR, "Model not found")
         
-        model.name = data.get('name', model.name)
-        model.base_model = data.get('base_model', model.base_model)
-        model.protocol = data.get('protocol', model.protocol)
-        model.api_domain = data.get('api_domain', model.api_domain)
-        model.api_key = data.get('api_key', model.api_key)
+        # 更新所有可修改的字段
+        if 'name' in data:
+            model.name = data['name']
+        if 'base_model' in data:
+            model.base_model = data['base_model']
+        if 'supplier' in data:
+            model.supplier = data['supplier']
+        if 'model_type' in data:
+            model.model_type = data['model_type']
+        if 'protocol' in data:
+            model.protocol = data['protocol']
+        if 'api_domain' in data:
+            model.api_domain = data['api_domain']
+        if 'api_key' in data:
+            model.api_key = data['api_key']
         
         if 'config_list' in data:
             model.config = json.dumps(data['config_list'])

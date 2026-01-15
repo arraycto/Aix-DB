@@ -17,6 +17,7 @@ from services.user_service import (
     add_user,
     update_user,
     delete_user,
+    get_record_sql,
 )
 from model.schemas import (
     LoginRequest,
@@ -32,6 +33,8 @@ from model.schemas import (
     AddUserRequest,
     UpdateUserRequest,
     DeleteUserRequest,
+    GetRecordSqlRequest,
+    GetRecordSqlResponse,
     get_schema,
 )
 
@@ -198,6 +201,44 @@ async def fead_back(request: Request, body: DifyFeedbackRequest):
     chat_id = body.chat_id
     rating = body.rating
     return await send_dify_feedback(chat_id, rating)
+
+
+@bp.post("/get_record_sql", name="get_record_sql")
+@openapi.summary("获取记录SQL语句")
+@openapi.description("根据记录ID查询SQL语句")
+@openapi.tag("用户服务")
+@openapi.body(
+    {
+        "application/json": {
+            "schema": get_schema(GetRecordSqlRequest),
+        }
+    },
+    description="查询请求体",
+    required=True,
+)
+@openapi.response(
+    200,
+    {
+        "application/json": {
+            "schema": get_schema(GetRecordSqlResponse),
+        }
+    },
+    description="查询成功",
+)
+@check_token
+@async_json_resp
+@parse_params
+async def get_record_sql_api(request: Request, body: GetRecordSqlRequest):
+    """
+    获取记录SQL语句
+    :param request: 请求对象
+    :param body: 查询请求体（自动从请求中解析）
+    :return:
+    """
+    record_id = body.record_id
+    user_info = await get_user_info(request)
+    result = await get_record_sql(record_id, user_info["id"])
+    return result
 
 
 @bp.post("/list")

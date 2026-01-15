@@ -3,9 +3,10 @@ import { computed, onBeforeUnmount, onMounted, ref, watch, nextTick } from 'vue'
 import type { PropType } from 'vue'
 import { useBusinessStore } from '@/store/business'
 import type { DataTableColumns } from 'naive-ui'
-import { NDataTable, NCard } from 'naive-ui'
+import { NDataTable, NCard, NButton, NIcon, NSpin } from 'naive-ui'
 import { Pie, Column, Line } from '@antv/g2plot'
 import type { PieOptions, ColumnOptions, LineOptions, Plot } from '@antv/g2plot'
+import * as GlobalAPI from '@/api'
 
 const props = defineProps({
   chartId: {
@@ -19,6 +20,14 @@ const props = defineProps({
       data?: any[]
     } | null>,
     default: null,
+  },
+  recordId: {
+    type: Number,
+    default: null,
+  },
+  qaType: {
+    type: String,
+    default: '',
   },
 })
 
@@ -99,6 +108,113 @@ const chartTitleMap: Record<string, string> = {
 }
 
 const chartTitle = computed(() => chartTitleMap[templateCode.value] || '图表')
+
+// SQL相关状态
+const showSqlView = ref(false) // 是否显示SQL视图
+const sqlStatement = ref('')
+const isLoadingSql = ref(false)
+
+// 判断是否为数据问答类型
+const isDatabaseQa = computed(() => {
+  return props.qaType === 'DATABASE_QA'
+})
+
+// 格式化SQL语句
+const formatSql = (sql: string) => {
+  if (!sql) return ''
+  
+  // 清理SQL：去除多余的空白字符
+  let cleaned = sql.trim().replace(/\s+/g, ' ')
+  
+  // 简单的SQL格式化：将关键字大写，添加换行和缩进
+  let formatted = cleaned
+    .replace(/\bSELECT\b/gi, '\nSELECT')
+    .replace(/\bFROM\b/gi, '\nFROM')
+    .replace(/\bWHERE\b/gi, '\nWHERE')
+    .replace(/\bLEFT JOIN\b/gi, '\nLEFT JOIN')
+    .replace(/\bRIGHT JOIN\b/gi, '\nRIGHT JOIN')
+    .replace(/\bINNER JOIN\b/gi, '\nINNER JOIN')
+    .replace(/\bJOIN\b/gi, '\nJOIN')
+    .replace(/\bON\b/gi, '\n  ON')
+    .replace(/\bAND\b/gi, '\n  AND')
+    .replace(/\bOR\b/gi, '\n  OR')
+    .replace(/\bORDER BY\b/gi, '\nORDER BY')
+    .replace(/\bGROUP BY\b/gi, '\nGROUP BY')
+    .replace(/\bHAVING\b/gi, '\nHAVING')
+    .replace(/\bLIMIT\b/gi, '\nLIMIT')
+    .replace(/\bUNION\b/gi, '\n\nUNION')
+    .replace(/\bUNION ALL\b/gi, '\n\nUNION ALL')
+  
+  // 处理逗号后的列，添加换行
+  formatted = formatted.replace(/,\s*([a-zA-Z_][a-zA-Z0-9_]*)/g, ',\n    $1')
+  
+  return formatted.trim()
+}
+
+// 切换到SQL视图
+const handleShowSql = async () => {
+  if (!props.recordId || !isDatabaseQa.value) {
+    return
+  }
+  
+  // 如果还没有加载SQL，则加载
+  if (!sqlStatement.value && !isLoadingSql.value) {
+    isLoadingSql.value = true
+    try {
+      const res = await GlobalAPI.get_record_sql(props.recordId)
+      if (res.ok) {
+        const data = await res.json()
+        sqlStatement.value = data.data?.sql_statement || ''
+      } else {
+        window.$ModalMessage.error('获取SQL失败')
+        sqlStatement.value = ''
+      }
+    } catch (error) {
+      console.error('获取SQL失败:', error)
+      window.$ModalMessage.error('获取SQL失败')
+      sqlStatement.value = ''
+    } finally {
+      isLoadingSql.value = false
+    }
+  }
+  
+  // 切换到SQL视图
+  showSqlView.value = true
+}
+
+// 切换回图表视图
+const handleShowChart = () => {
+  showSqlView.value = false
+}
+
+// 复制SQL语句
+const handleCopySql = async () => {
+  if (!sqlStatement.value) {
+    return
+  }
+  
+  try {
+    await navigator.clipboard.writeText(sqlStatement.value)
+    window.$ModalMessage.success('SQL已复制到剪贴板')
+  } catch (error) {
+    console.error('复制失败:', error)
+    // 降级方案：使用传统的复制方法
+    const textArea = document.createElement('textarea')
+    textArea.value = sqlStatement.value
+    textArea.style.position = 'fixed'
+    textArea.style.left = '-999999px'
+    document.body.appendChild(textArea)
+    textArea.select()
+    try {
+      document.execCommand('copy')
+      window.$ModalMessage.success('SQL已复制到剪贴板')
+    } catch (err) {
+      window.$ModalMessage.error('复制失败，请手动复制')
+    } finally {
+      document.body.removeChild(textArea)
+    }
+  }
+}
 
 // 现代化配色方案
 const modernColorPalette = [
@@ -755,12 +871,14 @@ onBeforeUnmount(() => {
 <template>
   <div class="chart-wrapper">
     <n-card
-      :title="chartTitle"
+      :title="showSqlView ? 'SQL语句' : chartTitle"
       embedded
       class="modern-chart-card"
       :content-style="{
-        'background': 'linear-gradient(to bottom, #fafbff 0%, #ffffff 100%)',
-        'padding': '16px',
+        'background': showSqlView ? '#f8f9fa' : 'linear-gradient(to bottom, #fafbff 0%, #ffffff 100%)',
+        'padding': showSqlView ? '0' : '16px',
+        'position': 'relative',
+        'overflow': 'hidden',
       }"
       :header-style="{
         'color': '#ffffff',
@@ -772,31 +890,160 @@ onBeforeUnmount(() => {
         'border-radius': '16px 16px 0 0',
         'text-align': 'left',
         'box-shadow': '0 2px 8px rgba(102, 126, 234, 0.2)',
+        'position': 'relative',
       }"
     >
-      <!-- 表格渲染 -->
-      <div v-if="templateCode === 'temp01'" class="table-container">
-        <n-data-table
-          :columns="tableColumns"
-          :data="data"
-          :pagination="pagination"
-          :striped="true"
-          :single-line="false"
-          size="small"
-          :scroll-x="tableScrollX"
-          :row-class-name="(row, index) => (index % 2 === 0 ? 'even-row' : 'odd-row')"
-          class="modern-data-table"
-        />
-      </div>
+      <!-- Header按钮区域 -->
+      <template #header-extra>
+        <div class="card-header-buttons">
+          <!-- SQL图标按钮（显示图表时显示） -->
+          <n-button
+            v-if="isDatabaseQa && props.recordId && !showSqlView"
+            quaternary
+            size="small"
+            type="primary"
+            class="header-icon-btn"
+            @click="handleShowSql"
+          >
+            <template #icon>
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                class="icon-svg"
+              >
+                <ellipse cx="12" cy="5" rx="9" ry="3"></ellipse>
+                <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path>
+                <path d="M3 12c0 1.66 4 3 9 3s9-1.34 9-3"></path>
+              </svg>
+            </template>
+          </n-button>
+          
+          <!-- 图表图标按钮（显示SQL时显示） -->
+          <n-button
+            v-if="showSqlView"
+            quaternary
+            size="small"
+            type="primary"
+            class="header-icon-btn"
+            @click="handleShowChart"
+          >
+            <template #icon>
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                class="icon-svg"
+              >
+                <line x1="18" y1="20" x2="18" y2="10"></line>
+                <line x1="12" y1="20" x2="12" y2="4"></line>
+                <line x1="6" y1="20" x2="6" y2="14"></line>
+              </svg>
+            </template>
+          </n-button>
+        </div>
+      </template>
+      
+      <!-- 图表/SQL切换容器 -->
+      <div class="card-content-wrapper">
+        <!-- 图表视图 -->
+        <transition name="flip" mode="out-in">
+          <div v-if="!showSqlView" key="chart" class="chart-view">
+            <!-- 表格渲染 -->
+            <div v-if="templateCode === 'temp01'" class="table-container">
+              <n-data-table
+                :columns="tableColumns"
+                :data="data"
+                :pagination="pagination"
+                :striped="true"
+                :single-line="false"
+                size="small"
+                :scroll-x="tableScrollX"
+                :row-class-name="(row, index) => (index % 2 === 0 ? 'even-row' : 'odd-row')"
+                class="modern-data-table"
+              />
+            </div>
 
-      <!-- 图表容器（用于其他图表类型） -->
-      <div
-        v-else
-        :id="chartId"
-        ref="chartContainerRef"
-        class="chart-container"
-      />
+            <!-- 图表容器（用于其他图表类型） -->
+            <div
+              v-else
+              :id="chartId"
+              ref="chartContainerRef"
+              class="chart-container"
+            />
+          </div>
+          
+          <!-- SQL视图 -->
+          <div v-else key="sql" class="sql-view">
+            <div v-if="isLoadingSql" class="sql-loading-inline">
+              <n-spin size="large">
+                <template #description>
+                  <span style="color: #666; font-size: 14px;">正在加载SQL语句...</span>
+                </template>
+              </n-spin>
+            </div>
+            
+            <div v-else-if="sqlStatement" class="sql-view-content">
+              <!-- 浮动复制按钮 -->
+              <n-button
+                circle
+                size="small"
+                type="primary"
+                @click="handleCopySql"
+                class="sql-copy-float-btn"
+              >
+                <template #icon>
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    class="copy-icon"
+                  >
+                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                  </svg>
+                </template>
+              </n-button>
+              <!-- SQL内容铺满 -->
+              <div class="sql-content-inline">
+                <pre class="sql-code-inline" v-text="formatSql(sqlStatement)"></pre>
+              </div>
+            </div>
+            
+            <div v-else class="sql-empty-inline">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.5"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                class="sql-empty-icon-inline"
+              >
+                <circle cx="12" cy="12" r="10"></circle>
+                <line x1="12" y1="8" x2="12" y2="12"></line>
+                <line x1="12" y1="16" x2="12.01" y2="16"></line>
+              </svg>
+              <p class="sql-empty-text-inline">暂无SQL语句</p>
+            </div>
+          </div>
+        </transition>
+      </div>
     </n-card>
+    
   </div>
 </template>
 
@@ -986,4 +1233,239 @@ onBeforeUnmount(() => {
 :deep(.n-data-table .n-scrollbar-rail .n-scrollbar-rail__scrollbar:hover) {
   background-color: rgba(102, 126, 234, 0.5);
 }
+
+/* Header按钮样式 */
+.card-header-buttons {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.header-icon-btn {
+  color: #ffffff !important;
+  transition: all 0.3s ease;
+  padding: 6px 10px !important;
+}
+
+.header-icon-btn:hover {
+  background: rgba(255, 255, 255, 0.15) !important;
+  transform: scale(1.05);
+}
+
+.icon-svg {
+  width: 20px;
+  height: 20px;
+}
+
+/* 卡片内容容器 */
+.card-content-wrapper {
+  position: relative;
+  width: 100%;
+  min-height: 400px;
+  overflow: hidden;
+  perspective: 1000px;
+  -webkit-perspective: 1000px;
+}
+
+/* 图表视图 */
+.chart-view {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+
+/* SQL视图 */
+.sql-view {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 400px;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+
+/* 翻转动画 - 3D翻转效果 */
+.flip-enter-active,
+.flip-leave-active {
+  transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+  transform-style: preserve-3d;
+  -webkit-transform-style: preserve-3d;
+}
+
+.flip-enter-from {
+  opacity: 0;
+  transform: rotateY(-90deg) scale(0.9);
+  transform-origin: center center;
+}
+
+.flip-leave-to {
+  opacity: 0;
+  transform: rotateY(90deg) scale(0.9);
+  transform-origin: center center;
+}
+
+.flip-enter-to,
+.flip-leave-from {
+  opacity: 1;
+  transform: rotateY(0deg) scale(1);
+  transform-origin: center center;
+}
+
+/* 优化动画性能 */
+.chart-view,
+.sql-view {
+  will-change: transform, opacity;
+}
+
+/* SQL视图内联样式 */
+.sql-loading-inline {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  min-height: 400px;
+  flex: 1;
+  width: 100%;
+  height: 100%;
+}
+
+.sql-view-content {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  flex: 1;
+  min-height: 400px;
+  padding: 0;
+}
+
+/* 浮动复制按钮 */
+.sql-copy-float-btn {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  z-index: 10;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+  transition: all 0.3s ease;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+  border: none !important;
+}
+
+.sql-copy-float-btn:hover {
+  transform: scale(1.1);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.5);
+}
+
+.copy-icon {
+  width: 16px;
+  height: 16px;
+  color: #ffffff;
+}
+
+.sql-content-inline {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  background: #f8f9fa;
+  border-radius: 0;
+  border: none;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+}
+
+.sql-code-inline {
+  margin: 0;
+  padding: 20px 56px 20px 20px;
+  font-family: 'Fira Code', 'Consolas', 'Monaco', 'Courier New', monospace;
+  font-size: 14px;
+  line-height: 1.8;
+  color: #2d3748;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  overflow-x: hidden;
+  overflow-y: visible;
+  background: #f8f9fa;
+  border: none;
+  tab-size: 2;
+  width: 100%;
+  min-height: 100%;
+  box-sizing: border-box;
+}
+
+/* SQL内容区域滚动条 */
+.sql-content-inline::-webkit-scrollbar {
+  width: 8px;
+  height: 0;
+}
+
+.sql-content-inline::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 4px;
+}
+
+.sql-content-inline::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 4px;
+  transition: background 0.2s ease;
+}
+
+.sql-content-inline::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
+}
+
+.sql-empty-inline {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  min-height: 400px;
+  color: #9ca3af;
+  flex: 1;
+}
+
+.sql-empty-icon-inline {
+  width: 48px;
+  height: 48px;
+  margin-bottom: 16px;
+  opacity: 0.5;
+}
+
+.sql-empty-text-inline {
+  font-size: 14px;
+  color: #9ca3af;
+  margin: 0;
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+  .sql-code-inline {
+    font-size: 12px;
+    padding: 16px;
+  }
+  
+  .card-content-wrapper {
+    min-height: 300px;
+  }
+  
+  .sql-content-inline {
+    min-height: 300px;
+  }
+  
+  .sql-loading-inline,
+  .sql-empty-inline {
+    min-height: 300px;
+  }
+}
 </style>
+

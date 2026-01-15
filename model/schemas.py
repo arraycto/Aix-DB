@@ -355,6 +355,18 @@ class DifyFeedbackResponse(BaseResponse):
     data: Dict[str, str] = Field(description="反馈结果")
 
 
+class GetRecordSqlRequest(BaseModel):
+    """获取记录SQL请求"""
+
+    record_id: int = Field(description="记录ID")
+
+
+class GetRecordSqlResponse(BaseResponse):
+    """获取记录SQL响应"""
+
+    data: Dict[str, str] = Field(description="SQL语句")
+
+
 # ==================== 用户管理相关模型 ====================
 class UserBase(BaseModel):
     """用户基本信息"""

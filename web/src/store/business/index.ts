@@ -6,6 +6,7 @@ export interface BusinessState {
   writerList: any
   qa_type: any
   task_id: any
+  record_id: number | null // 记录ID，用于查询SQL语句
   file_list: {
     source_file_key: string
     parse_file_key: string
@@ -24,6 +25,8 @@ export const useBusinessStore = defineStore('business-store', {
       file_list: [],
       // 全局保存dify 任务id
       task_id: '',
+      // 全局保存记录ID，用于查询SQL语句
+      record_id: null,
       // 全局推荐问题禁用状态
       suggestedDisabled: false,
     }
@@ -43,6 +46,12 @@ export const useBusinessStore = defineStore('business-store', {
     // 清空文件url数组
     clear_file_list() {
       this.file_list = []
+    },
+    /**
+     * 清空记录ID
+     */
+    clear_record_id() {
+      this.record_id = null
     },
     // 删除单个文件url
     remove_file(source_file_key: string) {
@@ -157,6 +166,13 @@ export const useBusinessStore = defineStore('business-store', {
                           break
                         case 't04':
                           this.writerList = jsonChunk
+                          break
+                        case 't12':
+                          // 处理record_id，存储到store中以便后续使用
+                          if (jsonChunk.data && jsonChunk.data.record_id) {
+                            this.record_id = jsonChunk.data.record_id
+                            console.log('Received record_id from stream:', jsonChunk.data.record_id)
+                          }
                           break
                         default:
                                                 // 可以在这里处理其他类型的 dataType

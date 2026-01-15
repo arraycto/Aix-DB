@@ -269,6 +269,7 @@ export const fetchConversationHistory = async function fetchConversationHistory(
                 file_key: file_key_json,
                 role: 'user',
                 reader: null,
+                record_id: record.id, // 添加record_id
               })
 
               itemsToAdd.push({
@@ -279,6 +280,7 @@ export const fetchConversationHistory = async function fetchConversationHistory(
                 role: 'assistant',
                 reader,
                 chartData, // 从历史数据中提取的图表数据
+                record_id: record.id, // 添加record_id
               })
             }
           }

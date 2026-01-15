@@ -19,6 +19,7 @@ const props = withDefaults(defineProps<Props>(), {
   model: 'standard',
   parentScollBottomMethod: () => {},
   chartData: null, // 图表数据，用于多轮对话数据隔离
+  recordId: undefined, // 记录ID，用于查询SQL语句
 })
 
 // 自定义事件用于 子父组件传递事件信息
@@ -50,6 +51,7 @@ interface Props {
     data?: any[]
     recommended_questions?: string[]
   } | null
+  recordId?: number // 记录ID，用于查询SQL语句
 }
 
 // 解构 props
@@ -598,6 +600,8 @@ const currentQaOption = computed(() => {
             <MarkdownAntv
               :chart-id="props.chartId"
               :chart-data="props.chartData"
+              :record-id="props.recordId"
+              :qa-type="props.qaType"
               @chart-rendered="() => onChartCompletedReader()"
               @table-rendered="() => onTableCompletedReader()"
             />

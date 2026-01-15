@@ -62,6 +62,8 @@ class DataTypeEnum(Enum):
 
     TASK_ID = ("t11", "任务ID,方便后续点赞等操作")
 
+    RECORD_ID = ("t12", "记录ID,用于查询SQL等操作")
+
     STREAM_END = ("t99", "流式推流结束")
 
 

@@ -249,6 +249,7 @@ const conversationItems = ref<
       columns?: string[]
       data?: any[]
     } | null
+    record_id?: number // 记录ID，用于查询SQL语句
   }>
 >([])
 
@@ -452,6 +453,8 @@ const handleCreateStylized = async (
     // 清空文件上传列表
     pendingUploadFileInfoList.value = []
     businessStore.clear_file_list()
+    // 清空记录ID，准备接收新的record_id
+    businessStore.record_id = null
   }
 
   // 调用大模型
@@ -558,6 +561,23 @@ const handleCreateStylized = async (
         }
       },
       { deep: true, immediate: false },
+    )
+
+    // 监听 record_id 变化，更新对应的 conversationItem
+    const stopRecordIdWatcher = watch(
+      () => businessStore.record_id,
+      (newRecordId) => {
+        if (newRecordId && assistantIndex < conversationItems.value.length) {
+          // 更新对应的 conversationItem 的 record_id
+          if (conversationItems.value[assistantIndex].role === 'assistant') {
+            conversationItems.value[assistantIndex].record_id = newRecordId
+            console.log('Updated record_id for conversationItem:', newRecordId, assistantIndex)
+          }
+          // 更新完成后停止监听
+          stopRecordIdWatcher()
+        }
+      },
+      { immediate: false },
     )
 
     // 清空文件上传列表
@@ -1499,6 +1519,7 @@ const handleHistoryClick = async (item: any) => {
                     :qa-type="`${item.qa_type}`"
                     :chart-id="`${index}devID${generateRandomSuffix()}`"
                     :chart-data="item.chartData"
+                    :record-id="item.record_id"
                     :parent-scoll-bottom-method="scrollToBottom"
                     @failed="() => onFailedReader(index)"
                     @completed="() => onCompletedReader(index)"

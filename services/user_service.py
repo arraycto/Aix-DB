@@ -248,9 +248,11 @@ async def add_user_record(
     user_token: str,
     file_list: dict[str, Any] = None,
     datasource_id: int = None,
+    sql_statement: str = "",
 ):
     """
     新增用户问答记录
+    :param sql_statement: SQL语句（数据问答时保存，其他类型使用默认值空字符串）
     """
     try:
         # 1. 解析用户信息
@@ -267,11 +269,12 @@ async def add_user_record(
         }
         t02_answer_str = json.dumps(t02_message_json, ensure_ascii=False)
 
-        # 3. 插入数据库
+        # 3. 插入数据库并返回插入的记录ID
         insert_sql = """
             INSERT INTO t_user_qa_record
-            (uuid, user_id, chat_id, question, to2_answer,to4_answer, qa_type,file_key, datasource_id)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+            (uuid, user_id, chat_id, question, to2_answer,to4_answer, qa_type,file_key, datasource_id, sql_statement)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            RETURNING id
         """
         insert_params = (
             uuid_str,
@@ -283,9 +286,14 @@ async def add_user_record(
             qa_type,
             json.dumps(file_list, ensure_ascii=False) if file_list and len(file_list) > 0 else "",
             datasource_id,
+            sql_statement or "",  # 确保是字符串，非数据问答类型使用空字符串
         )
 
-        execute_sql_update(sql=insert_sql, params=insert_params)
+        # 执行插入并获取返回的ID
+        result = execute_sql_dict(sql=insert_sql, params=insert_params)
+        record_id = result[0]["id"] if result else None
+        
+        return record_id
 
     except Exception as e:
         # 建议替换成项目的日志系统
@@ -425,6 +433,33 @@ def query_user_qa_record(chat_id):
         return model_to_dict(records)
     # sql = f"select * from t_user_qa_record where chat_id='{chat_id}' order by id desc limit 1"
     # return mysql_client.query_mysql_dict(sql)
+
+
+async def get_record_sql(record_id: int, user_id: int) -> dict:
+    """
+    根据记录ID查询SQL语句
+    :param record_id: 记录ID
+    :param user_id: 用户ID（用于权限验证）
+    :return: 包含SQL语句的字典，如果记录不存在或用户无权限则返回空字符串
+    """
+    try:
+        with pool.get_session() as session:
+            session: Session = session
+            record = (
+                session.query(TUserQaRecord)
+                .filter(
+                    TUserQaRecord.id == record_id,
+                    TUserQaRecord.user_id == user_id
+                )
+                .first()
+            )
+            if record:
+                return {"sql_statement": record.sql_statement or ""}
+            else:
+                return {"sql_statement": ""}
+    except Exception as e:
+        logger.error(f"查询记录SQL失败: {e}", exc_info=True)
+        return {"sql_statement": ""}
 
 
 async def send_dify_feedback(chat_id, rating):

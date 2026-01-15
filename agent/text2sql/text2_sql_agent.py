@@ -51,6 +51,7 @@ class Text2SqlAgent:
         t02_answer_data = []
         t04_answer_data = {}
         current_step = None
+        final_filtered_sql = ""  # 用于保存最终的SQL语句
 
         try:
             # 获取用户信息（只调用一次）
@@ -133,11 +134,23 @@ class Text2SqlAgent:
                         current_step, t02_answer_data = await self._process_chunk(
                             chunk_dict, response, task_id, current_step, t02_answer_data, t04_answer_data
                         )
+                        # 跟踪permission_filter节点后的SQL语句
+                        if "permission_filter" in chunk_dict:
+                            step_value = chunk_dict.get("permission_filter", {})
+                            filtered_sql = step_value.get("filtered_sql")
+                            if filtered_sql:
+                                final_filtered_sql = filtered_sql
             else:
                 async for chunk_dict in graph.astream(**stream_kwargs):
                     current_step, t02_answer_data = await self._process_chunk(
                         chunk_dict, response, task_id, current_step, t02_answer_data, t04_answer_data
                     )
+                    # 跟踪permission_filter节点后的SQL语句
+                    if "permission_filter" in chunk_dict:
+                        step_value = chunk_dict.get("permission_filter", {})
+                        filtered_sql = step_value.get("filtered_sql")
+                        if filtered_sql:
+                            final_filtered_sql = filtered_sql
 
             # 流结束时关闭最后的details标签
             if self.show_thinking_process:
@@ -146,7 +159,7 @@ class Text2SqlAgent:
 
             # 只有在未取消的情况下才保存记录
             if not self.running_tasks[task_id]["cancelled"]:
-                await add_user_record(
+                record_id = await add_user_record(
                     uuid_str,
                     chat_id,
                     query,
@@ -156,7 +169,15 @@ class Text2SqlAgent:
                     user_token,
                     {},
                     datasource_id,
+                    final_filtered_sql,  # 传递SQL语句
                 )
+                # 发送record_id到前端，用于实时对话时显示SQL图标
+                if record_id and response:
+                    await self._send_response(
+                        response=response,
+                        content={"record_id": record_id},
+                        data_type=DataTypeEnum.RECORD_ID.value[0]
+                    )
 
         except asyncio.CancelledError:
             await response.write(self._create_response("\n> 这条消息已停止", "info", DataTypeEnum.ANSWER.value[0]))
@@ -415,7 +436,6 @@ class Text2SqlAgent:
                 
                 # 简洁格式：直接显示关键词
                 parts.append(f"关键词：{tokens_str}")
-                logger.info(f"BM25 分词说明已添加到输出: {tokens_str}")
             else:
                 # 分词结果为空时，使用原始查询作为关键词
                 parts.append(f"关键词：{user_query}")

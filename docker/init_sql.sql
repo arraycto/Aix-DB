@@ -116,6 +116,7 @@ CREATE TABLE t_user_qa_record (
   qa_type VARCHAR(100),
   datasource_id BIGINT,
   file_key TEXT,
+  sql_statement TEXT,
   create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -132,6 +133,7 @@ COMMENT ON COLUMN t_user_qa_record.to4_answer IS '业务数据';
 COMMENT ON COLUMN t_user_qa_record.qa_type IS '问答类型';
 COMMENT ON COLUMN t_user_qa_record.datasource_id IS '数据源ID';
 COMMENT ON COLUMN t_user_qa_record.file_key IS '文件minio/key';
+COMMENT ON COLUMN t_user_qa_record.sql_statement IS 'SQL语句（数据问答时保存）';
 COMMENT ON COLUMN t_user_qa_record.create_time IS '创建时间';
 
 -- t_ai_model definition
