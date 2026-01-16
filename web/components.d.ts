@@ -27,6 +27,7 @@ declare module 'vue' {
     MarkdownPreviewMarkdownAntv: typeof import('./src/components/MarkdownPreview/markdown-antv.vue')['default']
     MarkdownPreviewMarkdownEcharts: typeof import('./src/components/MarkdownPreview/markdown-echarts.vue')['default']
     MarkdownPreviewMarkdownTable: typeof import('./src/components/MarkdownPreview/markdown-table.vue')['default']
+    MarkdownPreviewStepProgress: typeof import('./src/components/MarkdownPreview/StepProgress.vue')['default']
     NavigationNavBar: typeof import('./src/components/Navigation/nav-bar.vue')['default']
     NavigationNavFooter: typeof import('./src/components/Navigation/nav-footer.vue')['default']
     NavigationNavOctocat: typeof import('./src/components/Navigation/nav-octocat.vue')['default']

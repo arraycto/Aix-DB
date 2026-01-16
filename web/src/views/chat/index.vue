@@ -379,6 +379,14 @@ const contentLoadingStates = ref(
   visibleConversationItems.value.map(() => false),
 )
 
+// 控制每个对话项的进度显示状态（用于隐藏 bars-scale）
+const progressDisplayStates = ref<Record<number, boolean>>({})
+
+// 处理进度显示状态变化
+const onProgressDisplayChange = (index: number, hasProgress: boolean) => {
+  progressDisplayStates.value[index] = hasProgress
+}
+
 
 // 改为对象存储不同问答类型的uuid
 const uuids = ref<Record<string, string>>({})
@@ -870,7 +878,26 @@ const onSuggested = (index: number) => {
   if (qa_type.value === 'REPORT_QA') {
     onAqtiveChange('COMMON_QA', '')
   }
-  handleCreateStylized(suggested_array.value[index])
+  
+  // 获取当前对话的file_key（从最后一个用户消息中获取）
+  let currentFileKey: { source_file_key: string; parse_file_key: string; file_size: string }[] = []
+  if (conversationItems.value.length > 0) {
+    // 从后往前查找最后一个用户消息的file_key
+    for (let i = conversationItems.value.length - 1; i >= 0; i--) {
+      const item = conversationItems.value[i]
+      if (item.role === 'user' && item.file_key && item.file_key.length > 0) {
+        currentFileKey = item.file_key
+        break
+      }
+    }
+  }
+  
+  // 如果当前问答类型是表格问答，且没有找到file_key，尝试从businessStore获取
+  if (qa_type.value === 'FILEDATA_QA' && currentFileKey.length === 0 && businessStore.file_list.length > 0) {
+    currentFileKey = businessStore.file_list
+  }
+  
+  handleCreateStylized(suggested_array.value[index], currentFileKey)
 }
 
 // 侧边表格滚动条数 动态显示隐藏设置 - REMOVED
@@ -1682,8 +1709,9 @@ const handleHistoryClick = async (item: any) => {
                   </div>
 
                   <!-- 加载动画：紧跟在消息下方，但对齐到左边 -->
+                  <!-- 当进度组件显示时，隐藏 bars-scale -->
                   <div
-                    v-if="contentLoadingStates[index]"
+                    v-if="contentLoadingStates[index] && !progressDisplayStates[index]"
                     class="i-svg-spinners:bars-scale"
                     :style="{
                       'width': `24px`,
@@ -1717,6 +1745,7 @@ const handleHistoryClick = async (item: any) => {
                     @chartready="() => onChartReady(index + 1)"
                     @recycle-qa="() => onRecycleQa(index)"
                     @praise-fead-back="() => onPraiseFeadBack(index)"
+                    @progress-display-change="(hasProgress: boolean) => onProgressDisplayChange(index, hasProgress)"
                     @belittle-feedback="
                       () => onBelittleFeedback(index)
                     "

@@ -354,6 +354,12 @@ const renderChart = async () => {
       const yCol = hasSeries ? chartColumns[2] : chartColumns[1]
       const seriesCol = hasSeries ? chartColumns[0] : undefined
       
+      // 优先使用chartData中的axis信息作为轴标题（如果存在）
+      const axisInfo = chartData.value?.axis
+      const xAxisName = axisInfo?.x?.name || xCol
+      const yAxisName = axisInfo?.y?.name || yCol
+      const seriesName = axisInfo?.series?.name || seriesCol
+      
       const columnData = chartDataValue.map((item: any) => {
         const dataItem: any = {
           name: item[xCol] || '',
@@ -434,7 +440,7 @@ const renderChart = async () => {
             },
           },
           title: {
-            text: xCol,
+            text: xAxisName,
             style: {
               fontSize: 14,
               fill: '#333',
@@ -473,7 +479,7 @@ const renderChart = async () => {
             },
           },
           title: {
-            text: yCol,
+            text: yAxisName,
             style: {
               fontSize: 14,
               fill: '#333',
@@ -545,6 +551,11 @@ const renderChart = async () => {
       // 假设第一列是 x 轴，第二列是 y 轴
       const xCol = chartColumns[0]
       const yCol = chartColumns[1]
+      
+      // 优先使用chartData中的axis信息作为轴标题（如果存在）
+      const axisInfo = chartData.value?.axis
+      const xAxisName = axisInfo?.x?.name || xCol
+      const yAxisName = axisInfo?.y?.name || yCol
       
       // 处理数据并检测是否为日期格式
       let lineData = chartDataValue.map((item: any) => ({
@@ -668,7 +679,7 @@ const renderChart = async () => {
             },
           },
           title: {
-            text: xCol,
+            text: xAxisName,
             style: {
               fontSize: 14,
               fill: '#333',
@@ -707,7 +718,7 @@ const renderChart = async () => {
             },
           },
           title: {
-            text: yCol,
+            text: yAxisName,
             style: {
               fontSize: 14,
               fill: '#333',

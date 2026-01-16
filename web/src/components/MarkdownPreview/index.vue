@@ -33,6 +33,7 @@ const emit = defineEmits([
   'praiseFeadBack',
   'belittleFeedback',
   'suggested',
+  'progress-display-change',
 ])
 
 const { copy, copyDuration } = useClipText()
@@ -78,6 +79,7 @@ const businessStore = useBusinessStore()
  * reader 读取是否结束
  */
 const readIsOver = ref(false)
+
 
 const renderedMarkdown = computed(() => {
   return MarkdownInstance.render(displayText.value)
@@ -219,6 +221,8 @@ const readTextStream = async () => {
         break
       }
 
+      // 不再处理进度信息（已移除 StepProgress 组件）
+
       // 每条消息换行显示
       textBuffer.value += stream.content
 
@@ -331,10 +335,13 @@ const showText = () => {
   scrollToBottomIfAtBottom()
 }
 
+// 记录上一次的 reader 状态，用于检测 reader 变化
+const previousReader = ref<ReadableStreamDefaultReader | null>(null)
+
 watch(
   () => props.reader,
-  () => {
-    if (props.reader) {
+  (newReader, oldReader) => {
+    if (newReader) {
       readTextStream()
     } else if (props.isView && props.chartData) {
       // 对于历史对话，如果 reader 为空但 chartData 存在，直接设置为完成状态以显示图表
@@ -345,6 +352,8 @@ watch(
       isCompleted.value = true
       readIsOver.value = true
     }
+    
+    previousReader.value = newReader
   },
   {
     immediate: true,
@@ -363,29 +372,23 @@ onUnmounted(() => {
   resetStatus()
 })
 
-defineExpose({
-  abortReader,
-  resetStatus,
-  initializeStart,
-  initializeEnd,
+// 检测是否有后端数据推送
+const hasDataReceived = computed(() => {
+  // 只有当实际接收到内容时，才认为有数据推送，从而隐藏外部的 bars-scale loading
+  // 如果只是 readerLoading 为 true 但没有内容，继续显示外部 loading
+  return displayText.value.length > 0
 })
 
+// 监听数据接收状态变化，通知父组件隐藏 bars-scale
+watch(hasDataReceived, (hasData, hadData) => {
+  // 当有数据推送时（不论步骤数据还是其他数据），通知父组件隐藏 bars-scale
+  if (hasData !== hadData) {
+    emit('progress-display-change', hasData)
+  }
+}, { immediate: true })
+
 const showLoading = computed(() => {
-  if (initialized.value) {
-    return true
-  }
-
-  if (!props.reader) {
-    return false
-  }
-
-  if (!readerLoading.value) {
-    return false
-  }
-  if (displayText.value) {
-    return false
-  }
-
+  // 始终不显示内部 loading，统一使用外部的 bars-scale，实现图标融合
   return false
 })
 
@@ -562,8 +565,8 @@ const currentQaOption = computed(() => {
     >
       <div
         text-16
-        class="w-full h-full overflow-hidden"
-        :class="[!displayText && 'flex items-center justify-center']"
+        class="w-full h-full flex flex-col"
+        :class="[!displayText && 'items-center justify-center overflow-hidden']"
       >
         <!-- <n-empty v-if="!displayText" size="large" class="font-bold">
                     <template #icon>
@@ -573,11 +576,12 @@ const currentQaOption = computed(() => {
                     </template>
                 </n-empty> -->
 
+
         <div
           v-if="displayText"
           ref="refWrapperContent"
           text-16
-          class="w-full h-full overflow-y-auto"
+          class="w-full flex-1 overflow-y-auto"
           p-15px
         >
           <div
@@ -1025,6 +1029,7 @@ const currentQaOption = computed(() => {
   cursor: default;
   font-weight: 500;
 }
+
 </style>
 
 

@@ -174,6 +174,15 @@ export const useBusinessStore = defineStore('business-store', {
                             console.log('Received record_id from stream:', jsonChunk.data.record_id)
                           }
                           break
+                        case 't14':
+                          // 处理步骤进度信息，直接传递给前端组件显示
+                          controller.enqueue(
+                            JSON.stringify({
+                              type: 'step_progress',
+                              ...jsonChunk.data,
+                            }),
+                          )
+                          break
                         default:
                                                 // 可以在这里处理其他类型的 dataType
                       }
