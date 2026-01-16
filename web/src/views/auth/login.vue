@@ -1,6 +1,4 @@
 <script lang="tsx" setup>
-import { useMessage } from 'naive-ui'
-import { onMounted, onUnmounted, reactive, ref } from 'vue'
 import * as GlobalAPI from '@/api'
 
 /* ---------- 登录业务 ---------- */
@@ -11,170 +9,11 @@ const router = useRouter()
 const userStore = useUserStore()
 const loading = ref(false)
 
-/* ---------- 酷炫科技背景 (Canvas) ---------- */
-// 避免使用 const 导致可能的重新赋值误判，尽管这里不应该修改
-const config = {
-  particleCount: 80,
-  connectionDist: 120,
-  mouseDist: 180,
-  color: '0, 242, 254', // RGB for Cyan #00f2fe
-}
-
-class Particle {
-  x: number
-  y: number
-  vx: number
-  vy: number
-  size: number
-
-  constructor(w: number, h: number) {
-    this.x = Math.random() * w
-    this.y = Math.random() * h
-    this.vx = (Math.random() - 0.5) * 1
-    this.vy = (Math.random() - 0.5) * 1
-    this.size = Math.random() * 2 + 1
-  }
-
-  update(w: number, h: number) {
-    this.x += this.vx
-    this.y += this.vy
-
-    // 边界检查 - 穿过屏幕
-    if (this.x < 0) {
-      this.x = w
-    } else if (this.x > w) {
-      this.x = 0
-    }
-    if (this.y < 0) {
-      this.y = h
-    } else if (this.y > h) {
-      this.y = 0
-    }
-  }
-
-  draw(ctx: CanvasRenderingContext2D) {
-    ctx.beginPath()
-    ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2)
-    ctx.fillStyle = `rgba(${config.color}, 0.6)`
-    ctx.fill()
-  }
-}
-
-// 使用 ref 避免闭包导致的变量引用问题
-const canvasRef = ref<HTMLCanvasElement | null>(null)
-let ctx: CanvasRenderingContext2D | null = null
-let particles: Particle[] = []
-let animationId = 0
-// 将 mouse 改为普通对象，并在使用时确保安全
-const mouse = { x: -1000, y: -1000 }
-
-const initParticles = () => {
-  if (!canvasRef.value) {
-    return
-  }
-  const { innerWidth: w, innerHeight: h } = window
-  canvasRef.value.width = w
-  canvasRef.value.height = h
-
-  particles = []
-  const count = w < 768 ? 40 : config.particleCount
-  for (let i = 0; i < count; i++) {
-    particles.push(new Particle(w, h))
-  }
-}
-
-const drawLines = (p: Particle, i: number) => {
-  if (!ctx) {
-    return
-  }
-  // 粒子间连线
-  for (let j = i + 1; j < particles.length; j++) {
-    const p2 = particles[j]
-    const dx = p.x - p2.x
-    const dy = p.y - p2.y
-    const dist = Math.sqrt(dx * dx + dy * dy)
-
-    if (dist < config.connectionDist) {
-      ctx.beginPath()
-      const lineAlpha = 1 - dist / config.connectionDist
-      ctx.strokeStyle = `rgba(${config.color}, ${lineAlpha})`
-      ctx.lineWidth = 0.5
-      ctx.moveTo(p.x, p.y)
-      ctx.lineTo(p2.x, p2.y)
-      ctx.stroke()
-    }
-  }
-
-  // 鼠标连线
-  const mdx = p.x - mouse.x
-  const mdy = p.y - mouse.y
-  const mDist = Math.sqrt(mdx * mdx + mdy * mdy)
-
-  if (mDist < config.mouseDist) {
-    ctx.beginPath()
-    const mouseAlpha = (1 - mDist / config.mouseDist) * 1.5
-    ctx.strokeStyle = `rgba(${config.color}, ${mouseAlpha})` // 鼠标连线更亮
-    ctx.lineWidth = 1
-    ctx.moveTo(p.x, p.y)
-    ctx.lineTo(mouse.x, mouse.y)
-    ctx.stroke()
-  }
-}
-
-const animate = () => {
-  if (!ctx || !canvasRef.value) {
-    return
-  }
-
-  try {
-    ctx.clearRect(0, 0, canvasRef.value.width, canvasRef.value.height)
-
-    particles.forEach((p, i) => {
-      p.update(canvasRef.value!.width, canvasRef.value!.height)
-      p.draw(ctx!)
-      drawLines(p, i)
-    })
-
-    animationId = requestAnimationFrame(animate)
-  } catch (error) {
-    console.error('Animation error:', error)
-    cancelAnimationFrame(animationId)
-  }
-}
-
-const handleMouseMove = (e: MouseEvent) => {
-  mouse.x = e.clientX
-  mouse.y = e.clientY
-}
-
-const startBg = () => {
-  canvasRef.value = document.getElementById('bg') as HTMLCanvasElement
-  if (canvasRef.value) {
-    ctx = canvasRef.value.getContext('2d')
-    initParticles()
-    animate()
-    window.addEventListener('mousemove', handleMouseMove)
-    window.addEventListener('resize', initParticles)
-  }
-}
-
-const stopBg = () => {
-  cancelAnimationFrame(animationId)
-  window.removeEventListener('mousemove', handleMouseMove)
-  window.removeEventListener('resize', initParticles)
-}
-
 /* ---------- 生命周期 ---------- */
 onMounted(() => {
   if (userStore.isLoggedIn) {
     router.push('/')
-  } else {
-    startBg()
   }
-})
-
-onUnmounted(() => {
-  stopBg()
 })
 
 /* ---------- 登录操作 ---------- */
@@ -212,15 +51,23 @@ const handleLogin = async () => {
 
 <template>
   <div class="login-container">
-    <canvas id="bg"></canvas>
+    <!-- 动态背景装饰 -->
+    <div class="background-shapes">
+      <div class="shape shape-1"></div>
+      <div class="shape shape-2"></div>
+      <div class="shape shape-3"></div>
+    </div>
+
     <div class="login-wrapper">
       <div class="header">
-        <h1 class="title">
-          AIX
-        </h1>
-        <p class="subtitle">
+        <div class="logo-area">
+          <div class="logo-icon-wrapper">
+            <div class="i-hugeicons:ai-chat-02 text-42 text-white"></div>
+          </div>
+        </div>
+        <h1 class="app-name">
           大模型数据助手
-        </p>
+        </h1>
       </div>
 
       <n-card
@@ -238,11 +85,11 @@ const handleLogin = async () => {
           >
             <n-input
               v-model:value="form.username"
-              placeholder="USERNAME"
-              class="tech-input"
+              placeholder="请输入用户名"
+              class="custom-input"
             >
               <template #prefix>
-                <div class="i-carbon-user text-cyan-400"></div>
+                <div class="i-hugeicons:user text-[#999] transition-colors group-hover:text-[#7E6BF2]"></div>
               </template>
             </n-input>
           </n-form-item>
@@ -253,12 +100,12 @@ const handleLogin = async () => {
             <n-input
               v-model:value="form.password"
               type="password"
-              placeholder="PASSWORD"
-              class="tech-input"
+              placeholder="请输入密码"
+              class="custom-input"
               show-password-on="click"
             >
               <template #prefix>
-                <div class="i-carbon-password text-cyan-400"></div>
+                <div class="i-hugeicons:lock-key text-[#999] transition-colors group-hover:text-[#7E6BF2]"></div>
               </template>
             </n-input>
           </n-form-item>
@@ -266,22 +113,27 @@ const handleLogin = async () => {
             <n-button
               type="primary"
               block
-              class="tech-button"
+              class="custom-button"
               :loading="loading"
               @click="handleLogin"
             >
               <span class="btn-text">立即登录</span>
+              <template #icon>
+                <div class="i-hugeicons:arrow-right-01"></div>
+              </template>
             </n-button>
           </n-form-item>
         </n-form>
       </n-card>
 
       <div class="footer-decoration">
-        <div class="deco-line"></div>
-        <div class="deco-text">
-          SECURE CONNECTION ESTABLISHED
+        <div class="feature-tags">
+          <span class="tag"><i class="i-hugeicons:database-01"></i> 数据分析</span>
+          <span class="dot">•</span>
+          <span class="tag"><i class="i-hugeicons:ai-cloud-01"></i> 智能问答</span>
+          <span class="dot">•</span>
+          <span class="tag"><i class="i-hugeicons:chart-histogram"></i> 可视化</span>
         </div>
-        <div class="deco-line"></div>
       </div>
     </div>
   </div>
@@ -296,169 +148,230 @@ const handleLogin = async () => {
   display: flex;
   justify-content: center;
   align-items: center;
-  background: radial-gradient(ellipse at bottom, #1b2735 0%, #090a0f 100%);
-  color: #fff;
-  font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+  background-color: #f8f9fc;
+  font-family: "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
 }
 
-#bg {
+/* 背景动态图形 */
+.background-shapes {
   position: absolute;
   top: 0;
   left: 0;
   width: 100%;
   height: 100%;
+  overflow: hidden;
   z-index: 1;
+}
+
+.shape {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(80px);
+  opacity: 0.6;
+  animation: float 20s infinite ease-in-out;
+}
+
+.shape-1 {
+  width: 500px;
+  height: 500px;
+  background: rgba(126, 107, 242, 0.15);
+  top: -100px;
+  left: -100px;
+  animation-delay: 0s;
+}
+
+.shape-2 {
+  width: 400px;
+  height: 400px;
+  background: rgba(99, 211, 255, 0.15);
+  bottom: -50px;
+  right: -50px;
+  animation-delay: -5s;
+}
+
+.shape-3 {
+  width: 300px;
+  height: 300px;
+  background: rgba(255, 159, 243, 0.1);
+  top: 40%;
+  left: 60%;
+  animation-delay: -10s;
+}
+
+@keyframes float {
+  0% { transform: translate(0, 0) rotate(0deg); }
+  33% { transform: translate(30px, 50px) rotate(10deg); }
+  66% { transform: translate(-20px, 20px) rotate(-5deg); }
+  100% { transform: translate(0, 0) rotate(0deg); }
 }
 
 .login-wrapper {
   position: relative;
   z-index: 10;
   width: 420px;
-  padding: 40px;
+  padding: 48px 40px;
   display: flex;
   flex-direction: column;
-  gap: 30px;
-
-  /* 极简玻璃态 */
-
-  background: rgb(16 24 39 / 40%);
-  backdrop-filter: blur(12px);
-  border: 1px solid rgb(0 242 254 / 10%);
-  border-radius: 4px;
-  box-shadow: 0 0 50px rgb(0 0 0 / 50%), inset 0 0 20px rgb(0 242 254 / 5%);
+  gap: 24px;
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  border-radius: 28px;
+  box-shadow: 
+    0 20px 40px -12px rgba(126, 107, 242, 0.1),
+    0 0 0 1px rgba(255, 255, 255, 0.5) inset;
+  animation: slideUp 0.8s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
-/* 四角装饰 */
-
-.login-wrapper::before,
-.login-wrapper::after {
-  content: '';
-  position: absolute;
-  width: 20px;
-  height: 20px;
-  border: 2px solid #00f2fe;
-  transition: all 0.3s;
-}
-
-.login-wrapper::before {
-  top: -2px;
-  left: -2px;
-  border-right: none;
-  border-bottom: none;
-}
-
-.login-wrapper::after {
-  bottom: -2px;
-  right: -2px;
-  border-left: none;
-  border-top: none;
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(40px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 .header {
   text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 8px;
 }
 
-.title {
-  font-size: 36px;
-  font-weight: 800;
+.logo-area {
+  margin-bottom: 24px;
+  animation: popIn 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) 0.2s backwards;
+}
+
+.logo-icon-wrapper {
+  width: 72px;
+  height: 72px;
+  background: linear-gradient(135deg, #7E6BF2 0%, #9B8DFF 100%);
+  border-radius: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 12px 24px -8px rgba(126, 107, 242, 0.4);
+  transform: rotate(-5deg);
+  transition: transform 0.3s ease;
+}
+
+.logo-area:hover .logo-icon-wrapper {
+  transform: rotate(0deg) scale(1.05);
+}
+
+@keyframes popIn {
+  from { opacity: 0; transform: scale(0.5); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.app-name {
+  font-size: 26px;
+  font-weight: 700;
   margin: 0;
-  letter-spacing: 4px;
-  color: #fff;
-  text-shadow: 0 0 10px rgb(0 242 254 / 50%);
+  background: linear-gradient(135deg, #1a1a1a 0%, #4a4a4a 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  letter-spacing: 0.5px;
+  animation: fadeIn 0.6s ease 0.3s backwards;
 }
 
-.subtitle {
-  font-size: 14px;
-  color: rgb(0 242 254 / 80%);
-  letter-spacing: 8px;
-  margin-top: 10px;
-  text-transform: uppercase;
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 .login-card {
   background: transparent !important;
   border: none !important;
+  animation: fadeIn 0.6s ease 0.5s backwards;
 }
 
 /* 输入框样式定制 */
-
-:deep(.tech-input) {
-  background-color: rgb(0 0 0 / 30%) !important;
-  border: 1px solid rgb(0 242 254 / 20%) !important;
-  border-radius: 2px !important;
+:deep(.custom-input) {
+  --n-border: 1px solid #eef0f5 !important;
+  --n-border-hover: 1px solid #7E6BF2 !important;
+  --n-border-focus: 1px solid #7E6BF2 !important;
+  --n-box-shadow-focus: 0 0 0 3px rgba(126, 107, 242, 0.15) !important;
+  border-radius: 16px !important;
+  background-color: #f8f9fc !important;
   transition: all 0.3s ease;
 }
 
-:deep(.tech-input:hover) {
-  border-color: rgb(0 242 254 / 50%) !important;
-}
-
-:deep(.tech-input.n-input--focus) {
-  border-color: #00f2fe !important;
-  box-shadow: 0 0 15px rgb(0 242 254 / 20%) !important;
-  background-color: rgb(0 0 0 / 50%) !important;
-}
-
-:deep(.n-input__input-el) {
-  color: #fff !important;
-  font-family: monospace;
-  letter-spacing: 1px;
-}
-
-:deep(.n-input__placeholder) {
-  color: rgb(255 255 255 / 30%) !important;
-  font-size: 12px;
-}
-
-/* 按钮样式 */
-
-.tech-button {
-  height: 48px;
-  background: rgb(0 242 254 / 10%);
-  border: 1px solid rgb(0 242 254 / 50%);
-  color: #00f2fe;
-  font-weight: bold;
-  letter-spacing: 2px;
-  border-radius: 2px;
-  transition: all 0.3s;
-  overflow: hidden;
-  position: relative;
-}
-
-.tech-button:hover {
-  background: rgb(0 242 254 / 20%);
-  box-shadow: 0 0 20px rgb(0 242 254 / 40%);
+:deep(.custom-input:hover),
+:deep(.custom-input.n-input--focus) {
+  background-color: #fff !important;
   transform: translateY(-1px);
 }
 
-.tech-button:active {
-  transform: translateY(1px);
+:deep(.n-input__input-el) {
+  height: 48px !important;
+  color: #1a1a1a !important;
+  font-weight: 500;
+  font-size: 15px;
 }
 
-.btn-text {
-  position: relative;
-  z-index: 1;
+:deep(.n-input__prefix) {
+  margin-right: 12px;
+}
+
+/* 按钮样式 */
+.custom-button {
+  height: 52px;
+  background: linear-gradient(135deg, #7E6BF2 0%, #6b5ae0 100%);
+  border: none;
+  color: #fff;
+  font-weight: 600;
+  font-size: 16px;
+  border-radius: 16px;
+  transition: all 0.3s ease;
+  margin-top: 16px;
+  box-shadow: 0 8px 20px -6px rgba(126, 107, 242, 0.4);
+}
+
+.custom-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 24px -8px rgba(126, 107, 242, 0.5);
+  background: linear-gradient(135deg, #8A79F5 0%, #7665EB 100%);
+}
+
+.custom-button:active {
+  transform: translateY(0);
 }
 
 /* 底部装饰 */
-
 .footer-decoration {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 15px;
-  margin-top: 10px;
+  margin-top: 8px;
+  animation: fadeIn 0.6s ease 0.6s backwards;
 }
 
-.deco-line {
-  height: 1px;
-  flex: 1;
-  background: linear-gradient(90deg, transparent, rgb(0 242 254 / 30%), transparent);
+.feature-tags {
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 
-.deco-text {
-  font-size: 10px;
-  color: rgb(255 255 255 / 30%);
-  letter-spacing: 1px;
+.tag {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: #888;
+  font-weight: 500;
+  transition: color 0.2s;
+}
+
+.tag:hover {
+  color: #7E6BF2;
+}
+
+.tag i {
+  font-size: 14px;
+}
+
+.dot {
+  color: #ddd;
+  font-size: 12px;
 }
 </style>

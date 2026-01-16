@@ -64,6 +64,9 @@ const hasMoreConversationHistory = computed(
   () => conversationHistoryCurrentLoadedPage.value < conversationHistoryTotalPages.value,
 )
 
+// 新增：专门用于控制转场动画的Key，避免因 currentConversationChatId 变化（如追加消息时）导致组件重载
+const chatTransitionKey = ref('chat-list')
+
 // 管理对话
 const isModalOpen = ref(false)
 function openModal() {
@@ -95,6 +98,10 @@ function newChat() {
     return
   }
   backgroundColorVariable.value = '#ffffff'
+
+  // 更新转场Key，确保如果是从聊天页切回默认页（虽然这里是切到默认页，动画由v-if控制，但重置Key是个好习惯）
+  // 或者如果直接在当前页重置（假设逻辑允许），Key变化会触发动画
+  chatTransitionKey.value = `new-chat-${Date.now()}`
 
   if (showDefaultPage.value) {
     window.$ModalMessage.success(`已经是最新对话`)
@@ -350,6 +357,7 @@ const conversationItems = ref<
       template_code?: string
       columns?: string[]
       data?: any[]
+      recommended_questions?: string[]
     } | null
     record_id?: number // 记录ID，用于查询SQL语句
   }>
@@ -1097,6 +1105,9 @@ const handleSubmitFromDefaultPage = (payload: { text: string, mode: string, data
   // 切换对话类型
   onAqtiveChange(payload.mode, '') // Switch mode
   inputTextString.value = payload.text // Set text
+
+  // 从默认页开始新对话，更新Key
+  chatTransitionKey.value = `new-chat-${Date.now()}`
   
   if (payload.datasource_id) {
      const ds = datasourceList.value.find((d) => d.id === payload.datasource_id)
@@ -1347,6 +1358,9 @@ const handleHistoryClick = async (item: any) => {
   // 每次点击历史记录时，刷新一次大语言模型列表和当前默认模型
   loadLLMModels()
 
+  // 切换到历史对话，更新Key以触发转场动画
+  chatTransitionKey.value = item.chat_id || `history-${item.uuid}`
+
   // 这里根据chat_id 过滤同一轮对话数据，使用分页加载
   await loadConversationHistory(item, true)
 
@@ -1473,24 +1487,26 @@ const handleHistoryClick = async (item: any) => {
               加载中...
             </div>
 
-            <div
-              v-for="(item, index) in tableData"
-              :key="item.uuid"
-              class="history-item px-2 py-3.5 mb-1 rounded-lg cursor-pointer flex items-center justify-between group transition-all duration-200"
-              :class="currentIndex === item.uuid ? 'bg-[#F2F0FF] text-[#7E6BF2] font-medium' : 'text-[#555] hover:bg-[#EAEBED] hover:text-[#333]'"
-              @click="handleHistoryClick(item)"
-            >
-              <div class="flex items-center gap-2 overflow-hidden w-full">
-                <div class="truncate text-[14px] w-full leading-relaxed ml-10 mt-10 history-item-text">
-                  {{ item.key || '无标题对话' }}
-                </div>
-              </div>
-              <!-- Attachment Icon Placeholder -->
+            <TransitionGroup name="list" tag="div" class="relative">
               <div
-                v-if="index % 4 === 0"
-                class="i-hugeicons:attachment-01 text-14 text-[#9ca3af] shrink-0 ml-2 opacity-0 group-hover:opacity-100 transition-opacity"
-              ></div>
-            </div>
+                v-for="(item, index) in tableData"
+                :key="item.uuid"
+                class="history-item px-2 py-3.5 mb-1 rounded-lg cursor-pointer flex items-center justify-between group transition-all duration-200"
+                :class="currentIndex === item.uuid ? 'bg-[#F2F0FF] text-[#7E6BF2] font-medium' : 'text-[#555] hover:bg-[#EAEBED] hover:text-[#333]'"
+                @click="handleHistoryClick(item)"
+              >
+                <div class="flex items-center gap-2 overflow-hidden w-full">
+                  <div class="truncate text-[14px] w-full leading-relaxed ml-10 mt-10 history-item-text">
+                    {{ item.key || '无标题对话' }}
+                  </div>
+                </div>
+                <!-- Attachment Icon Placeholder -->
+                <div
+                  v-if="index % 4 === 0"
+                  class="i-hugeicons:attachment-01 text-14 text-[#9ca3af] shrink-0 ml-2 opacity-0 group-hover:opacity-100 transition-opacity"
+                ></div>
+              </div>
+            </TransitionGroup>
 
             <div
               v-if="isLoadingMoreHistory"
@@ -1591,19 +1607,20 @@ const handleHistoryClick = async (item: any) => {
             class="scrollable-container"
             @scroll="handleScroll"
           >
-            <!-- 默认对话页面 -->
-            <transition name="fade">
+            <transition name="page-fade" mode="out-in">
               <div
                 v-if="showDefaultPage"
+                key="default-page"
                 class="h-full"
               >
                 <DefaultPage @submit="handleSubmitFromDefaultPage" />
               </div>
-            </transition>
 
-            <template
-              v-if="!showDefaultPage"
-            >
+              <div
+                v-else
+                :key="chatTransitionKey"
+                class="min-h-full"
+              >
               <div
                 v-for="(item, index) in visibleConversationItems"
                 :key="index"
@@ -1708,7 +1725,6 @@ const handleHistoryClick = async (item: any) => {
                   />
                 </div>
               </div>
-            </template>
 
             <!-- 底部加载更多提示（滚动到底部加载时显示） -->
             <transition name="fade">
@@ -1745,6 +1761,8 @@ const handleHistoryClick = async (item: any) => {
                 @suggested="onSuggested"
               />
             </div>
+              </div>
+            </transition>
           </div>
 
           <div
@@ -2437,17 +2455,49 @@ const handleHistoryClick = async (item: any) => {
   color: #635eed;
 }
 
-/* 新建对话框的淡入淡出动画样式 */
-
-.fade-enter-active {
-  transition: opacity 1s; /* 出现时较慢 */
+/* 列表项动画 */
+.list-move,
+.list-enter-active,
+.list-leave-active {
+  transition: all 0.3s ease;
 }
 
+.list-enter-from,
+.list-leave-to {
+  opacity: 0;
+  transform: translateX(-20px);
+}
+
+/* 确保离开的项目从布局流中移除，以便其他项目可以平滑移动 */
+.list-leave-active {
+  position: absolute;
+  width: 100%; 
+}
+
+/* 页面切换动画 */
+.page-fade-enter-active,
+.page-fade-leave-active {
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.page-fade-enter-from {
+  opacity: 0;
+  transform: translateY(10px);
+}
+
+.page-fade-leave-to {
+  opacity: 0;
+  transform: translateY(-10px);
+}
+
+/* 保持原有的 fade 动画兼容性，或者直接更新它 */
+.fade-enter-active,
 .fade-leave-active {
-  transition: opacity 0s; /* 隐藏时较快 */
+  transition: opacity 0.3s ease;
 }
 
-.fade-enter, .fade-leave-to /* .fade-leave-active in <2.1.8 */ {
+.fade-enter-from,
+.fade-leave-to {
   opacity: 0;
 }
 

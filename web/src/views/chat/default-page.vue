@@ -96,13 +96,52 @@ const handleDatasourceSelect = (ds: any) => {
 const fileUploadRef = ref<InstanceType<typeof FileUploadManager> | null>(null)
 const pendingUploadFileInfoList = ref<UploadFileInfo[]>([])
 
+// 检查是否是有效的 Excel 文件
+const isValidExcelFile = (file: UploadFileInfo): boolean => {
+  const fileName = file.name?.toLowerCase() || ''
+  return fileName.endsWith('.xlsx') || fileName.endsWith('.xls') || fileName.endsWith('.csv')
+}
+
+// 检查表格问答模式是否满足发送条件
+const canSubmitTableQA = computed(() => {
+  if (selectedMode.value?.value !== 'FILEDATA_QA') {
+    return true // 非表格问答模式，不限制
+  }
+  
+  // 表格问答模式：必须至少有一个已完成的 Excel 文件
+  const finishedFiles = pendingUploadFileInfoList.value.filter(
+    (f) => f.status === 'finished' && isValidExcelFile(f)
+  )
+  return finishedFiles.length > 0
+})
+
+// 检查是否可以发送（综合判断）
+const canSubmit = computed(() => {
+  // 基础条件：有文本输入或有文件
+  const hasContent = inputValue.value.trim() || pendingUploadFileInfoList.value.length > 0
+  
+  if (!hasContent) {
+    return false
+  }
+  
+  // 表格问答模式特殊检查
+  if (selectedMode.value?.value === 'FILEDATA_QA') {
+    return canSubmitTableQA.value
+  }
+  
+  return true
+})
+
 const handleEnter = (e?: KeyboardEvent) => {
   if (e && e.shiftKey) {
     return
   }
 
-  // Allow submit if there is text OR files
-  if (!inputValue.value.trim() && pendingUploadFileInfoList.value.length === 0) {
+  // 检查是否可以发送
+  if (!canSubmit.value) {
+    if (selectedMode.value?.value === 'FILEDATA_QA') {
+      window.$ModalMessage.warning('表格问答需要上传Excel文件（.xlsx, .xls, .csv）才能发送')
+    }
     return
   }
 
@@ -118,6 +157,21 @@ const handleEnter = (e?: KeyboardEvent) => {
   if (hasErrorFiles) {
     window.$ModalMessage.warning('存在上传失败的文件，请移除后重试')
     return
+  }
+
+  // 表格问答模式：验证文件格式
+  if (selectedMode.value?.value === 'FILEDATA_QA') {
+    const finishedFiles = pendingUploadFileInfoList.value.filter((f) => f.status === 'finished')
+    if (finishedFiles.length === 0) {
+      window.$ModalMessage.warning('表格问答需要上传Excel文件（.xlsx, .xls, .csv）才能发送')
+      return
+    }
+    
+    const invalidFiles = finishedFiles.filter((f) => !isValidExcelFile(f))
+    if (invalidFiles.length > 0) {
+      window.$ModalMessage.warning('表格问答只支持Excel文件格式(.xlsx, .xls, .csv)')
+      return
+    }
   }
 
   emit('submit', {
@@ -165,6 +219,10 @@ const handleChipClick = (chip: typeof chips[0]) => {
 }
 
 const clearMode = () => {
+  // 如果是表格问答模式，清空已上传的文件
+  if (selectedMode.value?.value === 'FILEDATA_QA') {
+    pendingUploadFileInfoList.value = []
+  }
   selectedMode.value = null
   selectedDatasource.value = null
 }
@@ -252,6 +310,15 @@ const bottomIcons = [
           v-model="pendingUploadFileInfoList"
           class="w-full"
         />
+        
+        <!-- 表格问答模式提示：需要上传Excel文件 -->
+        <div
+          v-if="selectedMode?.value === 'FILEDATA_QA' && !canSubmitTableQA"
+          class="table-qa-hint"
+        >
+          <div class="hint-icon i-hugeicons:info-circle-01"></div>
+          <span class="hint-text">表格问答需要上传Excel文件（.xlsx, .xls, .csv）才能发送</span>
+        </div>
 
         <!-- Middle: Input -->
         <div class="input-wrapper w-full">
@@ -387,7 +454,7 @@ const bottomIcons = [
             <!-- Send Button (Purple Circle) -->
             <div
               class="send-btn-circle"
-              :class="{ disabled: !inputValue && !pendingUploadFileInfoList.length }"
+              :class="{ disabled: !canSubmit }"
               @click="handleEnter()"
             >
               <div class="i-hugeicons:arrow-up-01 text-white text-20 font-bold"></div>
@@ -666,7 +733,7 @@ const bottomIcons = [
   transition: all 0.2s;
   box-shadow: 0 2px 8px rgb(126 107 242 / 30%);
 
-  &:hover {
+  &:hover:not(.disabled) {
     background-color: #6b5ae0;
     transform: scale(1.05);
   }
@@ -675,10 +742,36 @@ const bottomIcons = [
     background-color: #e5e7eb;
     cursor: not-allowed;
     box-shadow: none;
+    opacity: 0.6;
 
     .i-hugeicons:arrow-up-01 {
       color: #9ca3af;
     }
+  }
+}
+
+/* 表格问答模式提示样式 */
+.table-qa-hint {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  margin-top: 8px;
+  background-color: #fef3c7;
+  border: 1px solid #fde68a;
+  border-radius: 8px;
+  font-size: 13px;
+  color: #92400e;
+  
+  .hint-icon {
+    font-size: 16px;
+    color: #f59e0b;
+    flex-shrink: 0;
+  }
+  
+  .hint-text {
+    line-height: 1.4;
+    flex: 1;
   }
 }
 </style>
