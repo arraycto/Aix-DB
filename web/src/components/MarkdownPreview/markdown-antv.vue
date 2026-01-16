@@ -120,6 +120,11 @@ const isDatabaseQa = computed(() => {
   return props.qaType === 'DATABASE_QA'
 })
 
+// 判断是否应该显示SQL按钮（数据问答和表格问答都支持）
+const shouldShowSqlButton = computed(() => {
+  return (props.qaType === 'DATABASE_QA' || props.qaType === 'FILEDATA_QA') && props.recordId
+})
+
 // 格式化SQL语句：复用全局 SQL 格式化工具，保证与系统其它页面一致
 const formatSql = (sql: string) => {
   return formatSQL(sql || '')
@@ -127,7 +132,7 @@ const formatSql = (sql: string) => {
 
 // 切换到SQL视图
 const handleShowSql = async () => {
-  if (!props.recordId || !isDatabaseQa.value) {
+  if (!props.recordId || !shouldShowSqlButton.value) {
     return
   }
   
@@ -883,7 +888,7 @@ onBeforeUnmount(() => {
         <div class="card-header-buttons">
           <!-- SQL图标按钮（显示图表时显示） -->
           <n-button
-            v-if="isDatabaseQa && props.recordId && !showSqlView"
+            v-if="shouldShowSqlButton && !showSqlView"
             quaternary
             size="small"
             type="primary"

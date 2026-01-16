@@ -161,7 +161,7 @@ class ExcelAgent:
                 # 如果没有 summarize，则保存空字符串
                 final_t02_answer = [summarize_content] if summarize_content else []
                 
-                await add_user_record(
+                record_id = await add_user_record(
                     uuid_str,
                     chat_id,
                     query,
@@ -172,6 +172,13 @@ class ExcelAgent:
                     file_list,
                     sql_statement=sql_statement,  # 保存 SQL 语句
                 )
+                # 发送record_id到前端，用于实时对话时显示SQL图标
+                if record_id and response:
+                    await self._send_response(
+                        response=response,
+                        content={"record_id": record_id},
+                        data_type=DataTypeEnum.RECORD_ID.value[0]
+                    )
 
         except asyncio.CancelledError:
             await response.write(self._create_response("\n> 这条消息已停止", "info", DataTypeEnum.ANSWER.value[0]))

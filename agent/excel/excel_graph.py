@@ -11,7 +11,7 @@ from agent.excel.excel_sql_node import sql_generate_excel
 from agent.excel.excel_data_render_antv import excel_data_render_antv
 from agent.excel.excel_chart_generator import excel_chart_generator
 from agent.excel.excel_question_recommender import excel_question_recommender
-from agent.text2sql.analysis.llm_summarizer import summarize
+from agent.excel.excel_summarizer import summarize
 
 logger = logging.getLogger(__name__)
 
