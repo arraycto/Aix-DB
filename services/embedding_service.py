@@ -77,12 +77,12 @@ async def generate_embedding(text: str) -> Optional[List[float]]:
             if not base_url.endswith("/v1"):
                 base_url = f"{base_url.rstrip('/')}/v1"
 
-        client = AsyncOpenAI(api_key=api_key, base_url=base_url)
+        # 使用 async with 确保客户端被正确关闭
+        async with AsyncOpenAI(api_key=api_key, base_url=base_url) as client:
+            response = await client.embeddings.create(model=model["base_model"], input=text)
 
-        response = await client.embeddings.create(model=model["base_model"], input=text)
-
-        if response.data:
-            return response.data[0].embedding
+            if response.data:
+                return response.data[0].embedding
 
     except Exception as e:
         traceback.print_exc()

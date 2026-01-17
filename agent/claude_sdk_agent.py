@@ -11,10 +11,35 @@ from claude_agent_sdk.types import SystemMessage, AssistantMessage, ResultMessag
 from common.minio_util import MinioUtils
 from constants.code_enum import DataTypeEnum, IntentEnum
 from services.user_service import add_user_record, decode_jwt_token
+from model.db_connection_pool import get_db_pool
+from model.db_models import TAiModel
 
 logger = logging.getLogger(__name__)
 
 minio_utils = MinioUtils()
+pool = get_db_pool()
+
+
+def _get_model_config_from_db(support_skill: bool = True):
+    """
+    从数据库获取模型配置
+    :param support_skill: 是否支持Skill，默认True
+    :return: 模型配置字典，包含 api_domain, api_key, base_model
+    """
+    with pool.get_session() as session:
+        model = session.query(TAiModel).filter(
+            TAiModel.default_model == True,
+            TAiModel.model_type == 1,
+            TAiModel.support_skill == support_skill
+        ).first()
+        if not model:
+            raise ValueError(f"No default AI model configured in database (support_skill={support_skill}).")
+        
+        return {
+            "api_domain": model.api_domain,
+            "api_key": model.api_key or "",
+            "base_model": model.base_model
+        }
 
 
 class ClaudeSDKAgent:
@@ -23,6 +48,25 @@ class ClaudeSDKAgent:
     """
 
     def __init__(self):
+        # 从数据库获取模型配置并设置环境变量
+        try:
+            model_config = _get_model_config_from_db(support_skill=True)
+            
+            # 设置环境变量
+            os.environ["ANTHROPIC_BASE_URL"] = model_config["api_domain"]
+            os.environ["ANTHROPIC_AUTH_TOKEN"] = model_config["api_key"]
+            os.environ["ANTHROPIC_MODEL"] = model_config["base_model"]
+            os.environ["ANTHROPIC_SMALL_FAST_MODEL"] = model_config["base_model"]
+            os.environ["API_TIMEOUT_MS"] = "600000"
+            os.environ["CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC"] = "1"
+            
+            logger.info(f"ClaudeSDKAgent 已从数据库加载配置: base_url={model_config['api_domain']}, model={model_config['base_model']}")
+        except Exception as e:
+            logger.error(f"从数据库加载模型配置失败: {e}")
+            # 如果从数据库加载失败，使用环境变量中的默认值（如果存在）
+            if not os.getenv("ANTHROPIC_BASE_URL"):
+                logger.warning("使用默认环境变量配置，如果未设置可能导致错误")
+        
         allowed_tools_env = os.getenv("CLAUDE_AGENT_ALLOWED_TOOLS")
         allowed_tools = (
             [t.strip() for t in allowed_tools_env.split(",") if t.strip()]
@@ -65,6 +109,13 @@ class ClaudeSDKAgent:
         """
         运行 Claude SDK 智能体，支持流式响应与任务取消
         """
+        # 验证查询文本不为空
+        if not query_text or not query_text.strip():
+            error_msg = "查询内容不能为空，请输入您的问题。"
+            await response.write(self._create_response(error_msg, "error", DataTypeEnum.ANSWER.value[0]))
+            await response.write(self._create_response("", "end", DataTypeEnum.STREAM_END.value[0]))
+            return
+
         file_as_markdown = ""
         if file_list:
             file_as_markdown = minio_utils.get_files_content_as_markdown(file_list)
@@ -76,9 +127,9 @@ class ClaudeSDKAgent:
 
         try:
             t02_answer_data = []
-            formatted_query = query_text
+            formatted_query = query_text.strip()
             if file_as_markdown:
-                formatted_query = f"{query_text}\n\n参考资料内容如下：\n{file_as_markdown}"
+                formatted_query = f"{formatted_query}\n\n参考资料内容如下：\n{file_as_markdown}"
 
             # 使用 session_id 作为线程标识，便于上层对话隔离
             chat_id = session_id if session_id else "default_thread"
@@ -96,7 +147,7 @@ class ClaudeSDKAgent:
                     await response.write(self._create_response("", "end", DataTypeEnum.STREAM_END.value[0]))
                     break
 
-                content = ""
+                content_parts = []
                 logger.info("ClaudeSDKAgent 运行结果：%s", message)
 
                 # 处理不同类型的message
@@ -108,30 +159,47 @@ class ClaudeSDKAgent:
                         "session_id": message.data.get("session_id", ""),
                         "model": message.data.get("model", ""),
                     }
-                    # content = f"[System] 初始化完成 - 会话: {system_info['session_id'][-8:] if system_info['session_id'] else 'N/A'}"
                     logger.info("ClaudeSDKAgent 运行结果：%s", system_info)
+                    # 系统消息不输出到前端，只记录日志
 
                 elif isinstance(message, AssistantMessage):
-                    if hasattr(message, "content"):
+                    if hasattr(message, "content") and message.content:
                         for block in message.content:
                             block_type = type(block).__name__
                             if block_type == "TextBlock":
-                                content = block.text + "\n\n"
-                            # elif block_type == "ToolUseBlock":
-                            #     content = block.name + "\n"
-                            # elif block_type == "ToolResultBlock":
-                            #     content = block.content + "\n\n"
+                                if hasattr(block, "text") and block.text:
+                                    content_parts.append(block.text)
                             elif block_type == "ResultMessage":
-                                content = block.result + "\n\n"
-                            else:
-                                content = ""
+                                if hasattr(block, "result") and block.result:
+                                    content_parts.append(block.result)
+                            # ToolUseBlock 和 ToolResultBlock 暂不输出到前端
+                            # elif block_type == "ToolUseBlock":
+                            #     if hasattr(block, "name") and block.name:
+                            #         content_parts.append(f"> 调用工具: {block.name}\n")
+                            # elif block_type == "ToolResultBlock":
+                            #     if hasattr(block, "content") and block.content:
+                            #         content_parts.append(block.content)
 
-                t02_answer_data.append(content)
-                await response.write(self._create_response(content))
-                if hasattr(response, "flush"):
-                    await response.flush()
-                await asyncio.sleep(0)
+                elif isinstance(message, ResultMessage):
+                    # 直接处理 ResultMessage 类型
+                    if hasattr(message, "result") and message.result:
+                        content_parts.append(message.result)
 
+                # 合并所有内容部分
+                content = "\n\n".join(content_parts) if content_parts else ""
+
+                # 只有非空内容才发送到前端
+                if content:
+                    t02_answer_data.append(content)
+                    await response.write(self._create_response(content))
+                    if hasattr(response, "flush"):
+                        await response.flush()
+                    await asyncio.sleep(0)
+
+            # 发送结束消息
+            if not self.running_tasks[task_id]["cancelled"]:
+                await response.write(self._create_response("", "end", DataTypeEnum.STREAM_END.value[0]))
+            
             # 未取消则记录
             if not self.running_tasks[task_id]["cancelled"]:
                 await add_user_record(

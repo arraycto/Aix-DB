@@ -44,8 +44,6 @@ class Text2SqlAgent:
     def __init__(self):
         # 存储运行中的任务
         self.running_tasks = {}
-        # 获取环境变量控制是否显示思考过程，默认为开启
-        self.show_thinking_process = os.getenv("SHOW_THINKING_PROCESS", "true").lower() == "true"
         # 是否启用链路追踪
         self.ENABLE_TRACING = os.getenv("LANGFUSE_TRACING_ENABLED", "true").lower() == "true"
         # 存储步骤开始时间（用于计算耗时）
@@ -176,11 +174,6 @@ class Text2SqlAgent:
                         if filtered_sql:
                             final_filtered_sql = filtered_sql
 
-            # 流结束时关闭最后的details标签
-            if self.show_thinking_process:
-                if current_step is not None and current_step not in ["summarize", "data_render", "error_handler"]:
-                    await self._close_current_step(response, t02_answer_data)
-
             # 只有在未取消的情况下才保存记录
             if not self.running_tasks[task_id]["cancelled"]:
                 record_id = await add_user_record(
@@ -225,8 +218,6 @@ class Text2SqlAgent:
         """
         # 检查是否已取消
         if task_id in self.running_tasks and self.running_tasks[task_id]["cancelled"]:
-            if self.show_thinking_process:
-                await self._send_response(response, "</details>\n\n", "continue", DataTypeEnum.ANSWER.value[0])
             await response.write(self._create_response("\n> 这条消息已停止", "info", DataTypeEnum.ANSWER.value[0]))
             # 发送最终停止确认消息
             await response.write(self._create_response("", "end", DataTypeEnum.STREAM_END.value[0]))
@@ -286,47 +277,8 @@ class Text2SqlAgent:
                 status="start",
                 progress_id=progress_id,
             )
-        
-        if self.show_thinking_process:
-            if new_step != current_step:
-                # 如果之前有打开的步骤，先关闭它
-                if current_step is not None and current_step not in ["summarize", "data_render", "error_handler"]:
-                    await self._close_current_step(response, t02_answer_data)
-
-                # 打开新的步骤 (除了 summarize、data_render、unified_collector 和 error_handler) think_html 标签里面添加open属性控制思考过程是否默认展开显示
-                # error_handler 是异常节点，直接显示错误信息，不需要显示思考过程标签
-                # datasource_selector、early_recommender、unified_collector 也不展示思考过程
-                if new_step not in [
-                    "summarize",
-                    "data_render",
-                    "error_handler",
-                    "datasource_selector",
-                    "early_recommender",
-                    "unified_collector",
-                    "question_recommender",
-                ]:
-                    think_html = f"""<details style="color:gray;background-color: #f8f8f8;padding: 2px;border-radius: 
-                    6px;margin-top:5px;">
-                                 <summary>{new_step}...</summary>"""
-                    await self._send_response(response, think_html, "continue", "t02")
-                    t02_answer_data.append(think_html)
-        else:
-            # 如果不显示思考过程，则只处理特定的步骤
-            if new_step in ["summarize", "data_render", "error_handler"]:
-                # 对于需要显示的步骤，确保之前的步骤已关闭
-                if current_step is not None and current_step not in ["summarize", "data_render", "error_handler"]:
-                    pass  # 不需要关闭details标签，因为我们根本没有打开它
 
         return new_step, t02_answer_data
-
-    async def _close_current_step(self, response, t02_answer_data: list) -> None:
-        """
-        关闭当前步骤的details标签
-        """
-        if self.show_thinking_process:
-            close_tag = "</details>\n\n"
-            await self._send_response(response, close_tag, "continue", "t02")
-            t02_answer_data.append(close_tag)
 
     async def _process_step_content(
         self,
@@ -379,24 +331,15 @@ class Text2SqlAgent:
                 DataTypeEnum.BUS_DATA.value[0] if step_name == "data_render" else DataTypeEnum.ANSWER.value[0]
             )
 
-            # 根据环境变量决定是否发送步骤的内容到前端
-            # 当 SHOW_THINKING_PROCESS 关闭时，只输出 summarize 步骤的内容到前端
-            # 当 SHOW_THINKING_PROCESS 开启时，输出所有步骤的内容到前端
             # unified_collector 节点由专门的 _process_unified_collector 处理，不在这里发送格式化消息
-            if self.show_thinking_process:
-                # 开启思考过程时，发送所有步骤的内容（除了 unified_collector）
-                should_send = step_name != "unified_collector"
-            else:
-                # 关闭思考过程时，只发送 summarize 步骤的内容
-                should_send = step_name == "summarize"
+            # 只发送关键步骤的内容到前端：error_handler（错误信息）、summarize（总结）
+            should_send = step_name in ["error_handler", "summarize"]
 
             if should_send:
                 await self._send_response(response=response, content=content, data_type=data_type)
 
-                # 只有当 show_thinking_process 开启时，或者当前步骤是 summarize 时，才收集到 t02_answer_data
-                # 关闭思考过程时，只保存 summarize 步骤的内容到数据库
-                should_collect = self.show_thinking_process or step_name == "summarize"
-                if should_collect and data_type == DataTypeEnum.ANSWER.value[0]:
+                # 只保存关键步骤的内容到数据库
+                if data_type == DataTypeEnum.ANSWER.value[0]:
                     t02_answer_data.append(content)
 
             # 这里设置渲染数据
@@ -404,6 +347,8 @@ class Text2SqlAgent:
                 render_data = step_value.get("render_data", {})
                 t04_answer_data.clear()
                 t04_answer_data.update({"data": render_data, "dataType": data_type})
+                # 发送渲染数据
+                await self._send_response(response=response, content=render_data, data_type=data_type)
 
             # 对于非渲染步骤，刷新响应
             if step_name != "data_render":
@@ -497,8 +442,7 @@ class Text2SqlAgent:
                 data_type=DataTypeEnum.ANSWER.value[0],
             )
             # 收集到 t02_answer_data
-            if not self.show_thinking_process or True:  # 总是收集 summarize
-                t02_answer_data.append(report_summary)
+            t02_answer_data.append(report_summary)
         
         # 2. 推送图表数据（render_data）
         render_data = step_value.get("render_data", {})

@@ -74,6 +74,7 @@ class TAiModel(Base):
     api_domain: Mapped[str] = mapped_column(String(255), nullable=False, comment="API Domain")
     protocol: Mapped[int] = mapped_column(Integer, default=1, nullable=False, comment="协议: 1:OpenAI, 2:Ollama")
     config: Mapped[Optional[str]] = mapped_column(Text, comment="配置JSON")
+    support_skill: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, comment="是否支持Skill")
     status: Mapped[int] = mapped_column(Integer, default=1, nullable=False, comment="状态: 1:正常")
     create_time: Mapped[int] = mapped_column(BigInteger, default=0, comment="创建时间")
 

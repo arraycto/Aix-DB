@@ -47,10 +47,12 @@ const loadLLMModels = async () => {
   try {
     const res = await fetch_model_list(undefined, 1)
     const list = Array.isArray(res?.data) ? res.data : Array.isArray(res) ? res : []
-    llmModels.value = list
-    if (list.length > 0) {
-      const defaultItem = list.find((m: any) => m.default_model)
-      const model = defaultItem || list[0]
+    // 过滤出支持 skill 的模型
+    const skillSupportedModels = list.filter((m: any) => m.support_skill !== true)
+    llmModels.value = skillSupportedModels
+    if (skillSupportedModels.length > 0) {
+      const defaultItem = skillSupportedModels.find((m: any) => m.default_model)
+      const model = defaultItem || skillSupportedModels[0]
       if (model) {
         selectedLLMModelId.value = model.id
       }
@@ -396,29 +398,26 @@ const bottomIcons = [
                       <span>{{ chip.label }}</span>
                     </div>
                   </template>
-                  <div class="flex flex-col min-w-[180px] max-w-[240px] bg-white rounded-xl shadow-2xl border border-gray-100 p-2">
-                    <div class="max-h-[320px] overflow-y-auto custom-scrollbar pr-1">
+                  <div class="flex flex-col min-w-[200px] max-w-[280px] bg-white rounded-xl shadow-2xl border border-gray-100 p-3">
+                    <div class="max-h-[360px] overflow-y-auto custom-scrollbar pr-1">
                       <div
                         v-for="ds in datasourceList"
                         :key="ds.id"
-                        class="group flex items-center gap-3 px-3 py-2.5 mb-1 last:mb-0 hover:bg-[#F5F3FF] cursor-pointer rounded-lg transition-all duration-200 border border-transparent hover:border-[#DDD6FE]"
+                        class="group flex items-center gap-2.5 px-3 py-2.5 mb-1.5 last:mb-0 hover:bg-[#F5F3FF] cursor-pointer rounded-lg transition-all duration-200 border border-transparent hover:border-[#DDD6FE]"
                         :class="{ 'bg-[#F5F3FF] border-[#DDD6FE]': selectedDatasource?.id === ds.id }"
                         @click="handleDatasourceSelect(ds)"
                       >
                         <div 
-                          class="flex-shrink-0 w-8 h-8 rounded-lg bg-gray-50 flex items-center justify-center group-hover:bg-white transition-colors"
+                          class="flex-shrink-0 w-7 h-7 rounded-lg bg-gray-50 flex items-center justify-center group-hover:bg-white transition-colors"
                           :class="{ 'bg-white': selectedDatasource?.id === ds.id }"
                         >
-                          <div class="i-hugeicons:database-01 text-16 text-gray-400 group-hover:text-[#7E6BF2]" :class="{ 'text-[#7E6BF2]': selectedDatasource?.id === ds.id }"></div>
+                          <div class="i-hugeicons:database-01 text-15 text-gray-400 group-hover:text-[#7E6BF2]" :class="{ 'text-[#7E6BF2]': selectedDatasource?.id === ds.id }"></div>
                         </div>
-                        <div class="flex flex-col flex-1 min-w-0">
-                          <span class="text-14 text-gray-700 font-semibold group-hover:text-[#7E6BF2] truncate" :class="{ 'text-[#7E6BF2]': selectedDatasource?.id === ds.id }" :title="ds.name">
-                            {{ ds.name }}
-                          </span>
-                          <span class="text-11 text-gray-400 truncate">{{ ds.type || 'Datasource' }}</span>
-                        </div>
+                        <span class="text-14 text-gray-700 font-medium group-hover:text-[#7E6BF2] truncate flex-1 min-w-0" :class="{ 'text-[#7E6BF2]': selectedDatasource?.id === ds.id }" :title="`${ds.name}-${ds.type || 'Datasource'}`">
+                          {{ ds.name }}-{{ ds.type || 'Datasource' }}
+                        </span>
                         <div v-if="selectedDatasource?.id === ds.id" class="flex-shrink-0">
-                          <div class="i-hugeicons:tick-02 text-16 text-[#7E6BF2]"></div>
+                          <div class="i-hugeicons:tick-02 text-15 text-[#7E6BF2]"></div>
                         </div>
                       </div>
 

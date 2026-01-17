@@ -180,6 +180,14 @@ onMounted(() => {
                       >
                         默认
                       </n-tag>
+                      <n-tag
+                        v-if="item.support_skill"
+                        type="info"
+                        size="small"
+                        round
+                      >
+                        Skill
+                      </n-tag>
                     </div>
                     <span class="supplier">{{ getSupplierName(item.supplier) }}</span>
                   </div>

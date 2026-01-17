@@ -29,6 +29,7 @@ const formData = reactive({
   protocol: 1, // 1: OpenAI
   api_domain: '',
   api_key: '',
+  support_skill: false,
   config_list: [] as { key: string, val: string }[],
 })
 
@@ -120,6 +121,7 @@ const initForm = async () => {
     formData.protocol = 1
     formData.api_domain = ''
     formData.api_key = ''
+    formData.support_skill = false
     formData.config_list = []
   }
 }
@@ -292,6 +294,14 @@ const onCreateConfig = () => {
           type="password"
           show-password-on="click"
           placeholder="请输入API Key"
+        />
+      </n-form-item>
+      <n-form-item
+        label="支持Skill"
+        path="support_skill"
+      >
+        <n-switch
+          v-model:value="formData.support_skill"
         />
       </n-form-item>
 

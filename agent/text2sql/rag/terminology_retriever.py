@@ -86,17 +86,49 @@ def retrieve_terminologies(
                         # 取消所有待处理的任务
                         pending = asyncio.all_tasks(loop)
                         for task in pending:
-                            task.cancel()
-                        # 等待所有任务取消完成
+                            if not task.done():
+                                task.cancel()
+                        
+                        # 等待所有任务取消完成，捕获所有异常
                         if pending:
-                            loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
-                    except Exception:
-                        pass
+                            try:
+                                # 给任务一些时间来完成清理
+                                loop.run_until_complete(
+                                    asyncio.wait_for(
+                                        asyncio.gather(*pending, return_exceptions=True),
+                                        timeout=2.0
+                                    )
+                                )
+                            except (asyncio.TimeoutError, Exception):
+                                # 超时或异常时，继续关闭循环
+                                pass
+                        
+                        # 再次检查并处理剩余任务
+                        remaining = [t for t in asyncio.all_tasks(loop) if not t.done()]
+                        if remaining:
+                            # 强制取消剩余任务
+                            for task in remaining:
+                                if not task.done():
+                                    task.cancel()
+                            # 快速等待，不阻塞太久
+                            try:
+                                loop.run_until_complete(
+                                    asyncio.wait_for(
+                                        asyncio.gather(*remaining, return_exceptions=True),
+                                        timeout=0.5
+                                    )
+                                )
+                            except (asyncio.TimeoutError, Exception):
+                                pass
+                    except Exception as e:
+                        logger.debug(f"关闭事件循环时出现异常（可忽略）: {e}")
                     finally:
                         try:
-                            loop.close()
-                        except Exception:
-                            pass
+                            # 确保事件循环被关闭
+                            if not loop.is_closed():
+                                loop.close()
+                        except Exception as e:
+                            logger.debug(f"关闭事件循环时出现异常（可忽略）: {e}")
             
             if not results or len(results) == 0:
                 return ""

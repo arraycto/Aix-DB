@@ -44,8 +44,6 @@ class ExcelAgent:
     def __init__(self):
         # 存储运行中的任务
         self.running_tasks = {}
-        # 获取环境变量控制是否显示思考过程，默认为开启
-        self.show_thinking_process = os.getenv("SHOW_THINKING_PROCESS", "true").lower() == "true"
         self.excel_graph = create_excel_graph()
         # 是否启用链路追踪
         self.ENABLE_TRACING = os.getenv("LANGFUSE_TRACING_ENABLED", "true").lower() == "true"
@@ -73,7 +71,7 @@ class ExcelAgent:
         :param file_list
         :return:
         """
-        t02_answer_data = []  # 用于保存所有步骤的HTML内容（思考过程）
+        t02_answer_data = []  # 用于保存 summarize 内容
         t04_answer_data = {}  # 用于保存图表数据
         summarize_content = ""  # 用于单独保存 summarize 信息（markdown格式）
         sql_statement = ""  # 用于保存 SQL 语句
@@ -272,24 +270,8 @@ class ExcelAgent:
                 status="start",
                 progress_id=progress_id,
             )
-        
-        # 只输出 summarize 到前端，不显示思考过程的 details 标签
-        # 对于需要显示的步骤，确保之前的步骤已关闭
-        # unified_collector 节点也不展示思考过程
-        if new_step in ["summarize", "data_render", "data_render_apache", "unified_collector"]:
-            if current_step is not None and current_step not in ["summarize", "data_render", "data_render_apache", "unified_collector"]:
-                pass  # 不需要关闭details标签，因为我们根本没有打开它
 
         return new_step, t02_answer_data
-
-    async def _close_current_step(self, response, t02_answer_data: list) -> None:
-        """
-        关闭当前步骤的details标签
-        """
-        if self.show_thinking_process:
-            close_tag = "</details>\n\n"
-            await self._send_response(response, close_tag, "continue", "t02")
-            t02_answer_data.append(close_tag)
 
     async def _process_step_content(
         self,
@@ -440,7 +422,7 @@ class ExcelAgent:
                     t04_answer_data.clear()
                     t04_answer_data.update({"data": payload, "dataType": data_type})
 
-                # 无论是否显示思考过程，都推送推荐问题数据到前端
+                # 推送推荐问题数据到前端
                 await self._send_response(
                     response=response,
                     content=payload,
