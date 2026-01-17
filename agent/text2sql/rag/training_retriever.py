@@ -46,22 +46,52 @@ def retrieve_training_examples(
     try:
         with pool.get_session() as session:
             # 查询匹配的训练示例
-            # 注意：当前使用同步方式，如果需要在异步环境中调用，可以使用 asyncio.run
+            # 注意：_select_training_by_question 是异步函数，需要在异步环境中调用
+            # 在线程池中运行时，需要创建新的事件循环
             import asyncio
+            
+            # 尝试获取当前线程的事件循环
+            loop = None
+            should_close_loop = False
+            
             try:
                 loop = asyncio.get_event_loop()
-            except RuntimeError:
+                # 检查事件循环是否已关闭
+                if loop.is_closed():
+                    raise RuntimeError("Event loop is closed")
+            except (RuntimeError, AttributeError):
+                # 没有事件循环或事件循环已关闭，创建新的
                 loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(loop)
+                should_close_loop = True
             
-            results = loop.run_until_complete(_select_training_by_question(
-                session=session,
-                question=question,
-                oid=oid,
-                datasource_id=datasource_id,
-                top_k=top_k,
-                use_embedding=use_embedding,
-            ))
+            try:
+                results = loop.run_until_complete(_select_training_by_question(
+                    session=session,
+                    question=question,
+                    oid=oid,
+                    datasource_id=datasource_id,
+                    top_k=top_k,
+                    use_embedding=use_embedding,
+                ))
+            finally:
+                # 如果是我们创建的事件循环，确保关闭它
+                if should_close_loop and loop and not loop.is_closed():
+                    try:
+                        # 取消所有待处理的任务
+                        pending = asyncio.all_tasks(loop)
+                        for task in pending:
+                            task.cancel()
+                        # 等待所有任务取消完成
+                        if pending:
+                            loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
+                    except Exception:
+                        pass
+                    finally:
+                        try:
+                            loop.close()
+                        except Exception:
+                            pass
             
             if not results or len(results) == 0:
                 return ""

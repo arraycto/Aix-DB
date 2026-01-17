@@ -23,10 +23,13 @@ logger = logging.getLogger(__name__)
 # 步骤名称映射（中文）
 STEP_NAME_MAP = {
     "excel_parsing": "文件解析...",
+    "early_recommender": "推荐问题生成...",
     "sql_generator": "SQL生成...",
     "sql_executor": "SQL执行...",
     "chart_generator": "图表配置...",
     "summarize": "结果总结...",
+    "parallel_collector": "并行处理（图表配置与结果总结）...",
+    "unified_collector": "统一收集（结果总结→图表数据→推荐问题）...",
     "data_render": "数据渲染...",
     "data_render_apache": "数据渲染...",
     "question_recommender": "推荐问题...",
@@ -272,8 +275,9 @@ class ExcelAgent:
         
         # 只输出 summarize 到前端，不显示思考过程的 details 标签
         # 对于需要显示的步骤，确保之前的步骤已关闭
-        if new_step in ["summarize", "data_render", "data_render_apache"]:
-            if current_step is not None and current_step not in ["summarize", "data_render", "data_render_apache"]:
+        # unified_collector 节点也不展示思考过程
+        if new_step in ["summarize", "data_render", "data_render_apache", "unified_collector"]:
+            if current_step is not None and current_step not in ["summarize", "data_render", "data_render_apache", "unified_collector"]:
                 pass  # 不需要关闭details标签，因为我们根本没有打开它
 
         return new_step, t02_answer_data
@@ -393,8 +397,17 @@ class ExcelAgent:
                     await response.flush()
                 await asyncio.sleep(0)
         
+        # 处理统一收集节点：按顺序推送 summarize → 图表数据 → 推荐问题
+        # 注意：unified_collector 节点不在 content_map 中处理，避免发送格式化消息到前端
+        if step_name == "unified_collector":
+            updated_summarize_content = await self._process_unified_collector(
+                response, step_value, t02_answer_data, t04_answer_data, summarize_content
+            )
+            # 处理完 unified_collector 后直接返回，不再通过 content_map 发送内容
+            return updated_summarize_content or summarize_content, sql_statement
+        
         # 处理推荐问题：将推荐问题合并到已有的图表数据中发送到前端（在 content_map 之外处理）
-        # 要求：无论 SHOW_THINKING_PROCESS 是否开启，都要推送给前端，并保存在 t04_answer_data 中
+        # 注意：如果使用了 unified_collector，这个分支可能不会执行
         if step_name == "question_recommender":
             recommended_questions = step_value.get("recommended_questions", [])
             logger.info(
@@ -444,6 +457,104 @@ class ExcelAgent:
                 )
         
         return summarize_content, sql_statement
+
+    async def _process_unified_collector(
+        self,
+        response,
+        step_value: Dict[str, Any],
+        t02_answer_data: list,
+        t04_answer_data: Dict[str, Any],
+        summarize_content: str,
+    ) -> str:
+        """
+        处理统一收集节点：按顺序推送 summarize → 图表数据 → 推荐问题
+        
+        要求：
+        1. 首先推送 summarize（文本总结）
+        2. 然后推送图表数据（render_data）
+        3. 最后推送推荐问题（recommended_questions）
+        
+        Returns:
+            更新后的 summarize_content
+        """
+        logger.info("📦 开始处理统一收集节点")
+        logger.info(f"📋 step_value keys: {list(step_value.keys())}")
+        logger.info(f"📋 step_value recommended_questions: {step_value.get('recommended_questions')}")
+        
+        # 1. 推送 summarize（结果总结）
+        report_summary = step_value.get("report_summary")
+        if report_summary:
+            logger.info("📤 推送 summarize（结果总结）")
+            # 确保 report_summary 是字符串格式
+            if isinstance(report_summary, dict):
+                if "content" in report_summary:
+                    report_summary = str(report_summary["content"])
+                elif "summary" in report_summary:
+                    report_summary = str(report_summary["summary"])
+                else:
+                    report_summary = json.dumps(report_summary, ensure_ascii=False, indent=2)
+            else:
+                report_summary = str(report_summary)
+            
+            await self._send_response(
+                response=response,
+                content=report_summary,
+                data_type=DataTypeEnum.ANSWER.value[0],
+            )
+            # 收集到 t02_answer_data
+            t02_answer_data.append(report_summary)
+            # 更新 summarize_content
+            summarize_content = report_summary
+        
+        # 2. 推送图表数据（render_data）
+        render_data = step_value.get("render_data", {})
+        if render_data:
+            logger.info("📤 推送图表数据")
+            # 更新 t04_answer_data
+            t04_answer_data.clear()
+            t04_answer_data.update({"data": render_data, "dataType": DataTypeEnum.BUS_DATA.value[0]})
+            
+            # 发送图表数据
+            await self._send_response(
+                response=response,
+                content=render_data,
+                data_type=DataTypeEnum.BUS_DATA.value[0],
+            )
+        
+        # 3. 推送推荐问题（recommended_questions）
+        recommended_questions = step_value.get("recommended_questions", [])
+        logger.info(f"📋 检查推荐问题: {recommended_questions}, 类型: {type(recommended_questions)}, 长度: {len(recommended_questions) if isinstance(recommended_questions, list) else 'N/A'}")
+        
+        if recommended_questions and isinstance(recommended_questions, list) and len(recommended_questions) > 0:
+            logger.info(f"📤 推送推荐问题，数量: {len(recommended_questions)}")
+            
+            # 将推荐问题添加到已有的图表数据中
+            if t04_answer_data and "data" in t04_answer_data and isinstance(t04_answer_data["data"], dict):
+                t04_answer_data["data"]["recommended_questions"] = recommended_questions
+                payload = t04_answer_data["data"]
+                data_type = t04_answer_data.get("dataType", DataTypeEnum.BUS_DATA.value[0])
+                logger.info(f"📊 将推荐问题合并到已有图表数据中，payload keys: {list(payload.keys())}")
+            else:
+                # 如果没有图表数据，仅使用推荐问题构建数据结构
+                logger.info("📊 没有图表数据，仅使用推荐问题构建数据结构")
+                payload = {"recommended_questions": recommended_questions}
+                data_type = DataTypeEnum.BUS_DATA.value[0]
+                t04_answer_data.clear()
+                t04_answer_data.update({"data": payload, "dataType": data_type})
+            
+            # 发送推荐问题
+            logger.info(f"📤 准备发送推荐问题到前端，payload: {payload}")
+            await self._send_response(
+                response=response,
+                content=payload,
+                data_type=data_type,
+            )
+            logger.info(f"✅ 已发送 {len(recommended_questions)} 个推荐问题到前端")
+        else:
+            logger.warning(f"⚠️ 推荐问题为空或格式错误: recommended_questions={recommended_questions}, type={type(recommended_questions)}")
+        
+        logger.info("✅ 统一收集节点处理完成")
+        return summarize_content
 
     def _format_step_output(self, step_display_name: str, content: str, step_name: str, elapsed_time: Optional[float] = None) -> str:
         """

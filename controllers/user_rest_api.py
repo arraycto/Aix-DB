@@ -10,6 +10,7 @@ from services.user_service import (
     authenticate_user,
     generate_jwt_token,
     query_user_record,
+    query_user_record_list,
     get_user_info,
     delete_user_record,
     send_dify_feedback,
@@ -24,6 +25,8 @@ from model.schemas import (
     LoginResponse,
     QueryUserRecordRequest,
     QueryUserRecordResponse,
+    QueryUserRecordListRequest,
+    QueryUserRecordListResponse,
     DeleteUserRecordRequest,
     DeleteUserRecordResponse,
     DifyFeedbackRequest,
@@ -127,6 +130,45 @@ async def query_user_qa_record(request: Request, body: QueryUserRecordRequest):
     chat_id = body.chat_id
     user_info = await get_user_info(request)
     return await query_user_record(user_info["id"], page, limit, search_text, chat_id)
+
+
+@bp.post("/query_user_record_list", name="query_user_record_list")
+@openapi.summary("查询用户对话历史列表（优化版）")
+@openapi.description("分页查询当前用户的对话历史列表，只返回必要字段，用于登录渲染优化")
+@openapi.tag("用户服务")
+@openapi.body(
+    {
+        "application/json": {
+            "schema": get_schema(QueryUserRecordListRequest),
+        }
+    },
+    description="查询参数",
+    required=True,
+)
+@openapi.response(
+    200,
+    {
+        "application/json": {
+            "schema": get_schema(QueryUserRecordListResponse),
+        }
+    },
+    description="查询成功",
+)
+@check_token
+@async_json_resp
+@parse_params
+async def query_user_record_list_api(request: Request, body: QueryUserRecordListRequest):
+    """
+    查询用户对话历史列表（优化版，只返回必要字段）
+    :param request: 请求对象
+    :param body: 查询请求体（自动从请求中解析）
+    :return:
+    """
+    page = body.page
+    limit = body.size
+    search_text = body.search_text
+    user_info = await get_user_info(request)
+    return await query_user_record_list(user_info["id"], page, limit, search_text)
 
 
 @bp.post("/delete_user_record")

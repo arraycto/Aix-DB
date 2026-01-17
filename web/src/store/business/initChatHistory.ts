@@ -113,12 +113,25 @@ export const fetchConversationHistory = async function fetchConversationHistory(
       conversationItems.value = []
     }
 
-    const res = await GlobalAPI.query_user_qa_record(
-      page,
-      limit,
-      searchText,
-      row?.chat_id,
-    )
+    // 如果只是加载列表（没有指定 chat_id），使用优化接口（只返回必要字段）
+    // 如果需要加载详细对话记录（有 chat_id），使用原接口（返回所有字段）
+    let res
+    if (!row?.chat_id) {
+      // 列表加载：使用优化接口，只返回必要字段，提升加载速度
+      res = await GlobalAPI.query_user_record_list(
+        page,
+        limit,
+        searchText,
+      )
+    } else {
+      // 详细对话加载：使用原接口，返回所有字段
+      res = await GlobalAPI.query_user_qa_record(
+        page,
+        limit,
+        searchText,
+        row?.chat_id,
+      )
+    }
     if (res.status === 401) {
       userStore.logout()
       setTimeout(() => {

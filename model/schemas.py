@@ -330,6 +330,29 @@ class QueryUserRecordResponse(BaseResponse):
     data: PaginatedResponse[Dict[str, Any]] = Field(description="聊天记录列表和总数")
 
 
+class ConversationHistoryListItem(BaseModel):
+    """对话历史列表项（简化版，只包含必要字段）"""
+
+    uuid: str = Field(description="唯一ID")
+    question: str = Field(description="用户问题")
+    chat_id: str = Field(description="对话ID")
+    qa_type: str = Field(description="问答类型")
+    datasource_id: Optional[int] = Field(None, description="数据源ID")
+    datasource_name: Optional[str] = Field(None, description="数据源名称")
+
+
+class QueryUserRecordListRequest(PaginationParams):
+    """查询用户对话历史列表请求（简化版，用于登录渲染）"""
+
+    search_text: Optional[str] = Field(None, description="搜索关键词，可选")
+
+
+class QueryUserRecordListResponse(BaseResponse):
+    """查询用户对话历史列表响应（简化版）"""
+
+    data: PaginatedResponse[ConversationHistoryListItem] = Field(description="对话历史列表和总数")
+
+
 class DeleteUserRecordRequest(BaseModel):
     """删除用户聊天记录请求"""
 

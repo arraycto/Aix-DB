@@ -101,6 +101,33 @@ export async function query_user_qa_record(page, limit, search_text, chat_id) {
 }
 
 /**
+ * 查询用户对话历史列表（优化版，只返回必要字段）
+ * @param page
+ * @param limit
+ * @param search_text
+ * @returns
+ */
+export async function query_user_record_list(page, limit, search_text) {
+  const userStore = useUserStore()
+  const token = userStore.getUserToken()
+  const url = new URL(`${location.origin}/sanic/user/query_user_record_list`)
+  const req = new Request(url, {
+    mode: 'cors',
+    method: 'post',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`, // 添加 token 到头部
+    },
+    body: JSON.stringify({
+      page,
+      size: limit, // 后端期望的字段名是 size，不是 limit
+      search_text,
+    }),
+  })
+  return fetch(req)
+}
+
+/**
  * 删除对话历史记录
  * @param page
  * @param limit

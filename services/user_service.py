@@ -416,6 +416,73 @@ async def query_user_record(user_id, page, size, search_text, chat_id):
     )
 
 
+async def query_user_record_list(user_id, page, size, search_text):
+    """
+    查询用户对话历史列表（简化版，只返回必要字段，用于登录渲染优化）
+    根据chat_id去重，取id最小的那条
+    :param page: 页码
+    :param size: 每页大小
+    :param user_id: 用户ID
+    :param search_text: 搜索关键词
+    :return: 包含必要字段的记录列表
+    """
+    conditions = []
+    if search_text:
+        search_text = search_text.strip()  # 去除search_text首尾空格
+        conditions.append(f"question LIKE '%{search_text}%'")
+    if user_id:
+        conditions.append(f"user_id = {user_id}")
+
+    # 计算偏移量
+    offset = (page - 1) * size
+
+    base_condition = ""
+    if conditions:
+        base_condition = " WHERE " + " AND ".join(conditions)
+
+    # 计算总数（根据chat_id去重）
+    count_sql = f"""
+        SELECT COUNT(1) as count FROM (
+            SELECT chat_id, MIN(id) as min_id 
+            FROM t_user_qa_record 
+            {base_condition}
+            GROUP BY chat_id
+        ) as distinct_chats
+    """
+    total_count_result = execute_sql_dict(count_sql)
+    total_count = total_count_result[0]["count"] if total_count_result else 0
+    total_pages = (total_count + size - 1) // size
+
+    # 查询去重后的记录，只选择必要字段
+    records_sql = f"""
+        SELECT 
+            t.uuid,
+            t.question,
+            t.chat_id,
+            t.qa_type,
+            t.datasource_id,
+            d.name as datasource_name
+        FROM t_user_qa_record t
+        INNER JOIN (
+            SELECT chat_id, MIN(id) as min_id 
+            FROM t_user_qa_record 
+            {base_condition}
+            GROUP BY chat_id
+        ) tm ON t.chat_id = tm.chat_id AND t.id = tm.min_id
+        LEFT JOIN t_datasource d ON t.datasource_id = d.id
+        ORDER BY t.id DESC 
+        LIMIT {size} OFFSET {offset}
+    """
+    records = execute_sql_dict(records_sql)
+
+    return PaginatedResponse(
+        records=records,
+        current_page=page,
+        total_count=total_count,
+        total_pages=total_pages,
+    )
+
+
 def query_user_qa_record(chat_id):
     """
     根据chat_id查询对话记录
