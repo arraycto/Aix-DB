@@ -1697,7 +1697,7 @@ const handleHistoryClick = async (item: any) => {
           <!-- History List -->
           <div
             ref="historyScrollRef"
-            class="flex-1 custom-scrollbar px-4"
+            class="flex-1 custom-scrollbar history-list-scrollbar px-4"
             :class="shouldForceScrollbar ? 'overflow-y-scroll' : 'overflow-y-auto'"
             @scroll.passive="handleHistoryScroll"
           >
@@ -2414,6 +2414,50 @@ const handleHistoryClick = async (item: any) => {
   background: #a1a1aa;
 }
 
+/* 对话历史列表滚动条：参考千问网站风格，hover 时显示 */
+/* 使用更具体的选择器确保覆盖 .custom-scrollbar 的样式 */
+.custom-scrollbar.history-list-scrollbar {
+  /* 默认隐藏滚动条 */
+  scrollbar-width: none !important; /* Firefox */
+  -ms-overflow-style: none !important; /* IE 10+ */
+}
+
+.custom-scrollbar.history-list-scrollbar::-webkit-scrollbar {
+  width: 0 !important; /* 默认隐藏滚动条 */
+  transition: width 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.custom-scrollbar.history-list-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.custom-scrollbar.history-list-scrollbar::-webkit-scrollbar-thumb {
+  background: transparent !important;
+  border-radius: 3px;
+}
+
+/* hover 时显示滚动条 */
+.custom-scrollbar.history-list-scrollbar:hover {
+  scrollbar-width: thin !important; /* Firefox */
+  -ms-overflow-style: auto !important; /* IE 10+ */
+}
+
+.custom-scrollbar.history-list-scrollbar:hover::-webkit-scrollbar {
+  width: 5px !important; /* hover 时显示，宽度 5px（更精致） */
+}
+
+.custom-scrollbar.history-list-scrollbar:hover::-webkit-scrollbar-thumb {
+  background: #d1d5db !important; /* 柔和的浅灰色，美观协调 */
+  border-radius: 3px;
+  border: 0;
+  background-clip: padding-box;
+  transition: background 0.15s ease;
+}
+
+.custom-scrollbar.history-list-scrollbar:hover::-webkit-scrollbar-thumb:hover {
+  background: #9ca3af !important; /* hover 时稍深的中灰色，视觉反馈更清晰 */
+}
+
 /* Top Header Styles */
 
 .top-header {
@@ -2720,7 +2764,7 @@ const handleHistoryClick = async (item: any) => {
   padding: 12px 30px;
   background-color: #fff;
   transition: background-color 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Helvetica Neue', Helvetica, Arial, 'Noto Sans SC', sans-serif;
+  font-family: "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
   font-size: 14px;
   font-weight: 400;
   line-height: 1.625;

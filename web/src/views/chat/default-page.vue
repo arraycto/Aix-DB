@@ -632,18 +632,22 @@ const bottomIcons = [
   --n-box-shadow-focus: none !important;
 
   background-color: transparent !important;
+  font-family: "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
   font-size: 16px;
   font-weight: 400;
   line-height: 1.625;
   letter-spacing: 0;
   padding: 0;
   flex: 1;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 
   :deep(.n-input__textarea-el) {
     padding: 0;
     min-height: 80px;
     line-height: 1.625;
     color: #1a1a1a;
+    font-family: "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
     font-size: 16px;
     font-weight: 400;
     letter-spacing: 0;
@@ -667,6 +671,7 @@ const bottomIcons = [
   gap: 6px;
   padding: 6px 12px;
   border-radius: 20px;
+  font-family: "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
   font-size: 13px;
   font-weight: 500;
   line-height: 1.5;
@@ -674,6 +679,8 @@ const bottomIcons = [
   border: 1px solid transparent;
   transition: all 0.2s;
   cursor: default;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 .inner-chip {
@@ -682,6 +689,7 @@ const bottomIcons = [
   gap: 6px;
   padding: 6px 12px;
   border-radius: 20px;
+  font-family: "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
   font-size: 13px;
   font-weight: 500;
   line-height: 1.5;
@@ -691,6 +699,8 @@ const bottomIcons = [
   transition: all 0.2s;
   background-color: #f8fafc;
   border: 1px solid transparent;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 
   &:hover, &.active-chip {
     background-color: #f1f5f9;
@@ -765,8 +775,11 @@ const bottomIcons = [
   background-color: #fef3c7;
   border: 1px solid #fde68a;
   border-radius: 8px;
+  font-family: "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
   font-size: 13px;
   color: #92400e;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
   
   .hint-icon {
     font-size: 16px;
