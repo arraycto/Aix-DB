@@ -53,17 +53,14 @@ async def add_model(data: dict) -> bool:
     with pool.get_session() as session:
         # Check if default
         model_type = data.get('model_type', 1)
-        support_skill = data.get('support_skill', False)
         
         # Only LLM (type 1) can be default
-        # 根据 support_skill 分别判断，如果没有相同 support_skill 的模型，则设为默认
         is_default = False
         if model_type == 1:
             count = session.query(TAiModel).filter(
-                TAiModel.model_type == 1,
-                TAiModel.support_skill == support_skill
+                TAiModel.model_type == 1
             ).count()
-            is_default = (count == 0) # First LLM with same support_skill is default
+            is_default = (count == 0) # First LLM is default
 
         config_list = data.get('config_list', [])
         config_str = json.dumps(config_list)
@@ -77,7 +74,6 @@ async def add_model(data: dict) -> bool:
             api_domain=data['api_domain'],
             api_key=data['api_key'],
             config=config_str,
-            support_skill=data.get('support_skill', False),
             default_model=is_default,
             status=1,
             create_time=int(datetime.now().timestamp())
@@ -107,8 +103,6 @@ async def update_model(model_id: int, data: dict) -> bool:
             model.api_domain = data['api_domain']
         if 'api_key' in data:
             model.api_key = data['api_key']
-        if 'support_skill' in data:
-            model.support_skill = data['support_skill']
         
         if 'config_list' in data:
             model.config = json.dumps(data['config_list'])
@@ -141,29 +135,25 @@ async def set_default_model(model_id: int) -> bool:
         if model.default_model:
             return True
             
-        # Unset previous default for LLM with same support_skill status
-        # 根据 support_skill 字段分别处理，相互独立
+        # Unset previous default for LLM
         session.query(TAiModel).filter(
             TAiModel.default_model == True,
-            TAiModel.model_type == 1,
-            TAiModel.support_skill == model.support_skill
+            TAiModel.model_type == 1
         ).update({TAiModel.default_model: False})
         
         model.default_model = True
         session.commit()
         return True
 
-async def get_default_model(support_skill: bool = False) -> Optional[dict]:
+async def get_default_model() -> Optional[dict]:
     """
     查询默认模型
-    :param support_skill: 是否支持Skill，默认False（查询不支持skill的默认模型）
     :return: 默认模型信息，如果不存在返回None
     """
     with pool.get_session() as session:
         model = session.query(TAiModel).filter(
             TAiModel.default_model == True,
-            TAiModel.model_type == 1,
-            TAiModel.support_skill == support_skill
+            TAiModel.model_type == 1
         ).first()
         
         if not model:

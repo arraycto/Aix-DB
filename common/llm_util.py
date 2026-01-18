@@ -9,22 +9,20 @@ from model.db_models import TAiModel
 pool = get_db_pool()
 
 
-def get_llm(temperature=0.75, support_skill: bool = False):
+def get_llm(temperature=0.75):
     """
     获取LLM模型
     :param temperature: 温度参数
-    :param support_skill: 是否支持Skill，默认False（查询不支持skill的默认模型）
     :return: LLM模型实例
     """
     with pool.get_session() as session:
-        # Fetch default model, 默认查询不支持skill的默认模型
+        # Fetch default model
         model = session.query(TAiModel).filter(
             TAiModel.default_model == True,
-            TAiModel.model_type == 1,
-            TAiModel.support_skill == support_skill
+            TAiModel.model_type == 1
         ).first()
         if not model:
-            raise ValueError(f"No default AI model configured in database (support_skill={support_skill}).")
+            raise ValueError("No default AI model configured in database.")
 
         # Map supplier to model type string used in map
         # 1:OpenAI, 2:Azure, 3:Ollama, 4:vLLM, 5:DeepSeek, 6:Qwen, 7:Moonshot, 8:ZhipuAI, 9:Other

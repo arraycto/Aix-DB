@@ -20,20 +20,18 @@ minio_utils = MinioUtils()
 pool = get_db_pool()
 
 
-def _get_model_config_from_db(support_skill: bool = True):
+def _get_model_config_from_db():
     """
     从数据库获取模型配置
-    :param support_skill: 是否支持Skill，默认True
     :return: 模型配置字典，包含 api_domain, api_key, base_model
     """
     with pool.get_session() as session:
         model = session.query(TAiModel).filter(
             TAiModel.default_model == True,
-            TAiModel.model_type == 1,
-            TAiModel.support_skill == support_skill
+            TAiModel.model_type == 1
         ).first()
         if not model:
-            raise ValueError(f"No default AI model configured in database (support_skill={support_skill}).")
+            raise ValueError("No default AI model configured in database.")
         
         return {
             "api_domain": model.api_domain,
@@ -50,7 +48,7 @@ class ClaudeSDKAgent:
     def __init__(self):
         # 从数据库获取模型配置并设置环境变量
         try:
-            model_config = _get_model_config_from_db(support_skill=True)
+            model_config = _get_model_config_from_db()
             
             # 设置环境变量
             os.environ["ANTHROPIC_BASE_URL"] = model_config["api_domain"]

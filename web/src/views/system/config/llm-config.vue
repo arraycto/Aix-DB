@@ -51,8 +51,9 @@ const handleDelete = (item: any) => {
         await delete_model(item.id)
         window.$ModalMessage.success('删除成功')
         fetchData()
-      } catch (e) {
-        window.$ModalMessage.error('删除失败')
+      } catch (e: any) {
+        const errorMsg = e?.msg || e?.message || '删除失败'
+        window.$ModalMessage.error(errorMsg)
       }
     },
   })
@@ -63,8 +64,9 @@ const handleSetDefault = async (item: any) => {
     await set_default_model(item.id)
     window.$ModalMessage.success('设置成功')
     fetchData()
-  } catch (e) {
-    window.$ModalMessage.error('设置失败')
+  } catch (e: any) {
+    const errorMsg = e?.msg || e?.message || '设置失败'
+    window.$ModalMessage.error(errorMsg)
   }
 }
 
@@ -179,14 +181,6 @@ onMounted(() => {
                         round
                       >
                         默认
-                      </n-tag>
-                      <n-tag
-                        v-if="item.support_skill"
-                        type="info"
-                        size="small"
-                        round
-                      >
-                        Skill
                       </n-tag>
                     </div>
                     <span class="supplier">{{ getSupplierName(item.supplier) }}</span>

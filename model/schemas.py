@@ -562,7 +562,6 @@ class AiModelCreator(AiModelItem):
     api_domain: str = Field(description="API域名")
     api_key: str = Field(description="API Key")
     config_list: List[AiModelConfigItem] = Field(default=[], description="额外配置列表")
-    support_skill: bool = Field(False, description="是否支持skill")
 
 
 class AiModelEditor(AiModelCreator):

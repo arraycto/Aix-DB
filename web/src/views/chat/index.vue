@@ -188,14 +188,12 @@ const loadLLMModels = async () => {
     // 1 = LLM，大语言模型
     const res = await fetch_model_list(undefined, 1)
     const list = Array.isArray(res?.data) ? res.data : Array.isArray(res) ? res : []
-    // 过滤出支持 skill 的模型
-    const skillSupportedModels = list.filter((m: any) => m.support_skill !== true)
-    llmModels.value = skillSupportedModels
+    llmModels.value = list
 
-    if (skillSupportedModels.length > 0) {
+    if (list.length > 0) {
       // 优先找 default_model = true 的
-      const defaultItem = skillSupportedModels.find((m: any) => m.default_model)
-      const model = defaultItem || skillSupportedModels[0]
+      const defaultItem = list.find((m: any) => m.default_model)
+      const model = defaultItem || list[0]
       if (model) {
         selectedLLMModelId.value = model.id
         if (model.name) {

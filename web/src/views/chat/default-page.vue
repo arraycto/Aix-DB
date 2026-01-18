@@ -47,12 +47,10 @@ const loadLLMModels = async () => {
   try {
     const res = await fetch_model_list(undefined, 1)
     const list = Array.isArray(res?.data) ? res.data : Array.isArray(res) ? res : []
-    // 过滤出支持 skill 的模型
-    const skillSupportedModels = list.filter((m: any) => m.support_skill !== true)
-    llmModels.value = skillSupportedModels
-    if (skillSupportedModels.length > 0) {
-      const defaultItem = skillSupportedModels.find((m: any) => m.default_model)
-      const model = defaultItem || skillSupportedModels[0]
+    llmModels.value = list
+    if (list.length > 0) {
+      const defaultItem = list.find((m: any) => m.default_model)
+      const model = defaultItem || list[0]
       if (model) {
         selectedLLMModelId.value = model.id
       }

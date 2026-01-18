@@ -35,8 +35,8 @@ class QaContext:
         self.chat_id = chat_id
 
 
-common_agent = ClaudeSDKAgent()
-# common_agent = CommonReactAgent()
+# common_agent = ClaudeSDKAgent()
+common_agent = CommonReactAgent()
 sql_agent = Text2SqlAgent()
 excel_agent = ExcelAgent()
 deep_agent = DeepAgent()

@@ -58,7 +58,15 @@ export async function add_model(data: any) {
     headers: getHeaders(),
     body: JSON.stringify(data),
   })
-  return fetch(req).then((res) => res.json())
+  const res = await fetch(req)
+  const data_res = await res.json()
+  if (data_res.code !== 200) {
+    const error = new Error(data_res.msg || '添加失败')
+    ;(error as any).code = data_res.code
+    ;(error as any).msg = data_res.msg
+    throw error
+  }
+  return data_res
 }
 
 /**
@@ -73,7 +81,15 @@ export async function update_model(data: any) {
     headers: getHeaders(),
     body: JSON.stringify(data),
   })
-  return fetch(req).then((res) => res.json())
+  const res = await fetch(req)
+  const data_res = await res.json()
+  if (data_res.code !== 200) {
+    const error = new Error(data_res.msg || '更新失败')
+    ;(error as any).code = data_res.code
+    ;(error as any).msg = data_res.msg
+    throw error
+  }
+  return data_res
 }
 
 /**
@@ -87,7 +103,15 @@ export async function delete_model(id: number) {
     method: 'delete',
     headers: getHeaders(),
   })
-  return fetch(req).then((res) => res.json())
+  const res = await fetch(req)
+  const data = await res.json()
+  if (data.code !== 200) {
+    const error = new Error(data.msg || '删除失败')
+    ;(error as any).code = data.code
+    ;(error as any).msg = data.msg
+    throw error
+  }
+  return data
 }
 
 /**
@@ -102,7 +126,15 @@ export async function set_default_model(id: number) {
     headers: getHeaders(),
     body: JSON.stringify({}),
   })
-  return fetch(req).then((res) => res.json())
+  const res = await fetch(req)
+  const data = await res.json()
+  if (data.code !== 200) {
+    const error = new Error(data.msg || '设置失败')
+    ;(error as any).code = data.code
+    ;(error as any).msg = data.msg
+    throw error
+  }
+  return data
 }
 
 /**
