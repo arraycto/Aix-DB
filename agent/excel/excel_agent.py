@@ -5,18 +5,24 @@ import os
 import time
 import traceback
 import uuid
-from typing import Optional, Dict, Any, Union
+from typing import Any, Dict, Optional, Union
 
 from langgraph.graph.state import CompiledStateGraph
 
 from agent.excel.excel_agent_state import ExcelAgentState
+from agent.excel.excel_duckdb_manager import (
+    close_duckdb_manager,
+    get_chat_duckdb_manager,
+)
 from agent.excel.excel_graph import create_excel_graph
 from constants.code_enum import DataTypeEnum
-from services.user_service import decode_jwt_token, add_user_record, query_user_qa_record
-from agent.excel.excel_duckdb_manager import close_duckdb_manager, get_chat_duckdb_manager
+from services.user_service import (
+    add_user_record,
+    decode_jwt_token,
+    query_user_qa_record,
+)
 
-from langfuse import get_client
-from langfuse.langchain import CallbackHandler
+# Langfuse 延迟导入，仅在启用 tracing 时导入
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +52,9 @@ class ExcelAgent:
         self.running_tasks = {}
         self.excel_graph = create_excel_graph()
         # 是否启用链路追踪
-        self.ENABLE_TRACING = os.getenv("LANGFUSE_TRACING_ENABLED", "true").lower() == "true"
+        self.ENABLE_TRACING = (
+            os.getenv("LANGFUSE_TRACING_ENABLED", "false").lower() == "true"
+        )
         # 存储步骤开始时间（用于计算耗时）
         self.step_start_times = {}
         # 存储步骤的 progressId
@@ -109,6 +117,9 @@ class ExcelAgent:
             # 准备 tracing 配置
             config = {}
             if self.ENABLE_TRACING:
+                # 延迟导入，仅在启用时导入
+                from langfuse.langchain import CallbackHandler
+
                 langfuse_handler = CallbackHandler()
                 callbacks = [langfuse_handler]
                 config = {
@@ -127,6 +138,9 @@ class ExcelAgent:
 
             # 如果启用 tracing，包裹在 trace 上下文中
             if self.ENABLE_TRACING:
+                # 延迟导入，仅在启用时导入
+                from langfuse import get_client
+
                 langfuse = get_client()
                 with langfuse.start_as_current_observation(
                     input=query,
@@ -138,19 +152,43 @@ class ExcelAgent:
                     rootspan.update_trace(session_id=chat_id, user_id=user_id)
 
                     async for chunk_dict in graph.astream(**stream_kwargs):
-                        current_step, t02_answer_data, summarize_content, sql_statement = await self._process_chunk(
-                            chunk_dict, response, task_id, current_step, t02_answer_data, t04_answer_data, summarize_content, sql_statement
+                        (
+                            current_step,
+                            t02_answer_data,
+                            summarize_content,
+                            sql_statement,
+                        ) = await self._process_chunk(
+                            chunk_dict,
+                            response,
+                            task_id,
+                            current_step,
+                            t02_answer_data,
+                            t04_answer_data,
+                            summarize_content,
+                            sql_statement,
                         )
                         # 跟踪 sql_generator 节点后的 SQL 语句
                         if "sql_generator" in chunk_dict:
                             step_value = chunk_dict.get("sql_generator", {})
                             generated_sql = step_value.get("generated_sql", "")
-                            if generated_sql and generated_sql != "No SQL query generated":
+                            if (
+                                generated_sql
+                                and generated_sql != "No SQL query generated"
+                            ):
                                 sql_statement = generated_sql
             else:
                 async for chunk_dict in graph.astream(**stream_kwargs):
-                    current_step, t02_answer_data, summarize_content, sql_statement = await self._process_chunk(
-                        chunk_dict, response, task_id, current_step, t02_answer_data, t04_answer_data, summarize_content, sql_statement
+                    current_step, t02_answer_data, summarize_content, sql_statement = (
+                        await self._process_chunk(
+                            chunk_dict,
+                            response,
+                            task_id,
+                            current_step,
+                            t02_answer_data,
+                            t04_answer_data,
+                            summarize_content,
+                            sql_statement,
+                        )
                     )
                     # 跟踪 sql_generator 节点后的 SQL 语句
                     if "sql_generator" in chunk_dict:
@@ -164,7 +202,7 @@ class ExcelAgent:
                 # t02_answer 保存 summarize 信息（markdown格式）
                 # 如果没有 summarize，则保存空字符串
                 final_t02_answer = [summarize_content] if summarize_content else []
-                
+
                 record_id = await add_user_record(
                     uuid_str,
                     chat_id,
@@ -181,12 +219,18 @@ class ExcelAgent:
                     await self._send_response(
                         response=response,
                         content={"record_id": record_id},
-                        data_type=DataTypeEnum.RECORD_ID.value[0]
+                        data_type=DataTypeEnum.RECORD_ID.value[0],
                     )
 
         except asyncio.CancelledError:
-            await response.write(self._create_response("\n> 这条消息已停止", "info", DataTypeEnum.ANSWER.value[0]))
-            await response.write(self._create_response("", "end", DataTypeEnum.STREAM_END.value[0]))
+            await response.write(
+                self._create_response(
+                    "\n> 这条消息已停止", "info", DataTypeEnum.ANSWER.value[0]
+                )
+            )
+            await response.write(
+                self._create_response("", "end", DataTypeEnum.STREAM_END.value[0])
+            )
         except Exception as e:
             traceback.print_exception(e)
             logger.error(f"表格问答智能体运行异常: {e}")
@@ -209,9 +253,15 @@ class ExcelAgent:
         """
         # 检查是否已取消
         if task_id in self.running_tasks and self.running_tasks[task_id]["cancelled"]:
-            await response.write(self._create_response("\n> 这条消息已停止", "info", DataTypeEnum.ANSWER.value[0]))
+            await response.write(
+                self._create_response(
+                    "\n> 这条消息已停止", "info", DataTypeEnum.ANSWER.value[0]
+                )
+            )
             # 发送最终停止确认消息
-            await response.write(self._create_response("", "end", DataTypeEnum.STREAM_END.value[0]))
+            await response.write(
+                self._create_response("", "end", DataTypeEnum.STREAM_END.value[0])
+            )
             raise asyncio.CancelledError()
 
         langgraph_step, step_value = next(iter(chunk_dict.items()))
@@ -224,9 +274,15 @@ class ExcelAgent:
         # 处理具体步骤内容
         if step_value:
             summarize_content, sql_statement = await self._process_step_content(
-                response, langgraph_step, step_value, t02_answer_data, t04_answer_data, summarize_content, sql_statement
+                response,
+                langgraph_step,
+                step_value,
+                t02_answer_data,
+                t04_answer_data,
+                summarize_content,
+                sql_statement,
             )
-            
+
             # 步骤内容处理完成后，发送完成信息（如果是最后一个步骤，确保发送完成信息）
             if langgraph_step in self.step_progress_ids:
                 progress_id = self.step_progress_ids.get(langgraph_step)
@@ -258,7 +314,7 @@ class ExcelAgent:
         if new_step and new_step not in self.step_start_times:
             self.step_start_times[new_step] = time.perf_counter()
             logger.debug(f"步骤 {new_step} 开始")
-            
+
             # 生成新的 progressId 并发送步骤开始信息
             progress_id = str(uuid.uuid4())
             self.step_progress_ids[new_step] = progress_id
@@ -294,26 +350,36 @@ class ExcelAgent:
             elapsed_time = end_time - start_time
             logger.debug(f"步骤 {step_name} 耗时: {elapsed_time:.3f}秒")
             del self.step_start_times[step_name]
-        
+
         content_map = {
             "excel_parsing": lambda: self._format_multi_file_table_info(step_value),
             "sql_generator": lambda: self._format_sql_generator_output(step_value),
-            "sql_executor": lambda: self._format_execution_result(step_value.get("execution_result")),
+            "sql_executor": lambda: self._format_execution_result(
+                step_value.get("execution_result")
+            ),
             "chart_generator": lambda: self._format_chart_generator_output(step_value),
             "summarize": lambda: step_value.get("report_summary", ""),
-            "data_render": lambda: step_value.get("render_data", {}) if step_value.get("render_data") else {},
-            "data_render_apache": lambda: step_value.get("render_data", {}) if step_value.get("render_data") else {},
+            "data_render": lambda: (
+                step_value.get("render_data", {})
+                if step_value.get("render_data")
+                else {}
+            ),
+            "data_render_apache": lambda: (
+                step_value.get("render_data", {})
+                if step_value.get("render_data")
+                else {}
+            ),
         }
 
         if step_name in content_map:
             content = content_map[step_name]()
-            
+
             # 特殊处理：收集 SQL 语句
             if step_name == "sql_generator":
                 sql_from_state = step_value.get("generated_sql", "")
                 if sql_from_state and sql_from_state != "No SQL query generated":
                     sql_statement = sql_from_state
-            
+
             # 特殊处理：收集 summarize 信息（markdown格式）
             if step_name == "summarize":
                 summarize_from_state = step_value.get("report_summary", "")
@@ -331,41 +397,63 @@ class ExcelAgent:
                             summarize_content = "\n\n".join(md_lines)
                     else:
                         summarize_content = str(summarize_from_state)
-            
+
             # 数据渲染节点返回业务数据
             data_type = (
-                DataTypeEnum.BUS_DATA.value[0] if step_name in ["data_render", "data_render_apache"] else DataTypeEnum.ANSWER.value[0]
+                DataTypeEnum.BUS_DATA.value[0]
+                if step_name in ["data_render", "data_render_apache"]
+                else DataTypeEnum.ANSWER.value[0]
             )
 
             # 只输出 summarize 步骤到前端，其他步骤信息不输出
             # 但保留 data_render 和 data_render_apache 的业务数据输出
-            should_send = step_name in ["summarize", "data_render", "data_render_apache"]
+            should_send = step_name in [
+                "summarize",
+                "data_render",
+                "data_render_apache",
+            ]
 
             if should_send:
                 # data_render 和 data_render_apache 步骤的内容是字典，直接作为业务数据发送
                 if step_name in ["data_render", "data_render_apache"]:
-                    await self._send_response(response=response, content=content, data_type=data_type)
+                    await self._send_response(
+                        response=response, content=content, data_type=data_type
+                    )
                 elif step_name == "summarize":
                     # summarize 步骤：直接输出内容，不包含标题和耗时信息
                     # 确保 content 是字符串类型
                     if isinstance(content, dict):
                         content = json.dumps(content, ensure_ascii=False, indent=2)
-                    await self._send_response(response=response, content=content, data_type=data_type)
+                    await self._send_response(
+                        response=response, content=content, data_type=data_type
+                    )
                 else:
                     # 其他步骤需要格式化输出（虽然现在不会执行到这里，但保留以防万一）
                     step_display_name = STEP_NAME_MAP.get(step_name, step_name)
                     # 确保 content 是字符串类型
                     if isinstance(content, dict):
                         content = json.dumps(content, ensure_ascii=False, indent=2)
-                    formatted_content = self._format_step_output(step_display_name, content, step_name, None)
-                    await self._send_response(response=response, content=formatted_content, data_type=data_type)
+                    formatted_content = self._format_step_output(
+                        step_display_name, content, step_name, None
+                    )
+                    await self._send_response(
+                        response=response,
+                        content=formatted_content,
+                        data_type=data_type,
+                    )
 
                 # 只收集 summarize 步骤的内容到 t02_answer_data
-                if step_name == "summarize" and data_type == DataTypeEnum.ANSWER.value[0]:
+                if (
+                    step_name == "summarize"
+                    and data_type == DataTypeEnum.ANSWER.value[0]
+                ):
                     t02_answer_data.append(content)
 
             # 这里设置渲染数据（和数据问答一致）
-            if step_name in ["data_render", "data_render_apache"] and data_type == DataTypeEnum.BUS_DATA.value[0]:
+            if (
+                step_name in ["data_render", "data_render_apache"]
+                and data_type == DataTypeEnum.BUS_DATA.value[0]
+            ):
                 render_data = step_value.get("render_data")
                 if render_data is not None and render_data:
                     t04_answer_data.clear()
@@ -378,16 +466,20 @@ class ExcelAgent:
                 if hasattr(response, "flush"):
                     await response.flush()
                 await asyncio.sleep(0)
-        
+
         # 处理统一收集节点：按顺序推送 summarize → 图表数据 → 推荐问题
         # 注意：unified_collector 节点不在 content_map 中处理，避免发送格式化消息到前端
         if step_name == "unified_collector":
             updated_summarize_content = await self._process_unified_collector(
-                response, step_value, t02_answer_data, t04_answer_data, summarize_content
+                response,
+                step_value,
+                t02_answer_data,
+                t04_answer_data,
+                summarize_content,
             )
             # 处理完 unified_collector 后直接返回，不再通过 content_map 发送内容
             return updated_summarize_content or summarize_content, sql_statement
-        
+
         # 处理推荐问题：将推荐问题合并到已有的图表数据中发送到前端（在 content_map 之外处理）
         # 注意：如果使用了 unified_collector，这个分支可能不会执行
         if step_name == "question_recommender":
@@ -398,7 +490,11 @@ class ExcelAgent:
                 f"t04_answer_data: {t04_answer_data}"
             )
 
-            if recommended_questions and isinstance(recommended_questions, list) and len(recommended_questions) > 0:
+            if (
+                recommended_questions
+                and isinstance(recommended_questions, list)
+                and len(recommended_questions) > 0
+            ):
                 # 获取已有的图表数据，如果没有则创建新的数据结构
                 if (
                     t04_answer_data
@@ -407,9 +503,13 @@ class ExcelAgent:
                     and t04_answer_data["data"]
                 ):
                     # 将推荐问题添加到已有的图表数据中
-                    t04_answer_data["data"]["recommended_questions"] = recommended_questions
+                    t04_answer_data["data"][
+                        "recommended_questions"
+                    ] = recommended_questions
                     payload = t04_answer_data["data"]
-                    data_type = t04_answer_data.get("dataType", DataTypeEnum.BUS_DATA.value[0])
+                    data_type = t04_answer_data.get(
+                        "dataType", DataTypeEnum.BUS_DATA.value[0]
+                    )
                 else:
                     # 如果没有图表数据，仅使用推荐问题构建数据结构
                     logger.warning(
@@ -437,7 +537,7 @@ class ExcelAgent:
                     f"question_recommender 步骤: 推荐问题为空或格式错误，"
                     f"recommended_questions: {recommended_questions}"
                 )
-        
+
         return summarize_content, sql_statement
 
     async def _process_unified_collector(
@@ -450,19 +550,21 @@ class ExcelAgent:
     ) -> str:
         """
         处理统一收集节点：按顺序推送 summarize → 图表数据 → 推荐问题
-        
+
         要求：
         1. 首先推送 summarize（文本总结）
         2. 然后推送图表数据（render_data）
         3. 最后推送推荐问题（recommended_questions）
-        
+
         Returns:
             更新后的 summarize_content
         """
         logger.info("📦 开始处理统一收集节点")
         logger.info(f"📋 step_value keys: {list(step_value.keys())}")
-        logger.info(f"📋 step_value recommended_questions: {step_value.get('recommended_questions')}")
-        
+        logger.info(
+            f"📋 step_value recommended_questions: {step_value.get('recommended_questions')}"
+        )
+
         # 1. 推送 summarize（结果总结）
         report_summary = step_value.get("report_summary")
         if report_summary:
@@ -474,10 +576,12 @@ class ExcelAgent:
                 elif "summary" in report_summary:
                     report_summary = str(report_summary["summary"])
                 else:
-                    report_summary = json.dumps(report_summary, ensure_ascii=False, indent=2)
+                    report_summary = json.dumps(
+                        report_summary, ensure_ascii=False, indent=2
+                    )
             else:
                 report_summary = str(report_summary)
-            
+
             await self._send_response(
                 response=response,
                 content=report_summary,
@@ -487,35 +591,51 @@ class ExcelAgent:
             t02_answer_data.append(report_summary)
             # 更新 summarize_content
             summarize_content = report_summary
-        
+
         # 2. 推送图表数据（render_data）
         render_data = step_value.get("render_data", {})
         if render_data:
             logger.info("📤 推送图表数据")
             # 更新 t04_answer_data
             t04_answer_data.clear()
-            t04_answer_data.update({"data": render_data, "dataType": DataTypeEnum.BUS_DATA.value[0]})
-            
+            t04_answer_data.update(
+                {"data": render_data, "dataType": DataTypeEnum.BUS_DATA.value[0]}
+            )
+
             # 发送图表数据
             await self._send_response(
                 response=response,
                 content=render_data,
                 data_type=DataTypeEnum.BUS_DATA.value[0],
             )
-        
+
         # 3. 推送推荐问题（recommended_questions）
         recommended_questions = step_value.get("recommended_questions", [])
-        logger.info(f"📋 检查推荐问题: {recommended_questions}, 类型: {type(recommended_questions)}, 长度: {len(recommended_questions) if isinstance(recommended_questions, list) else 'N/A'}")
-        
-        if recommended_questions and isinstance(recommended_questions, list) and len(recommended_questions) > 0:
+        logger.info(
+            f"📋 检查推荐问题: {recommended_questions}, 类型: {type(recommended_questions)}, 长度: {len(recommended_questions) if isinstance(recommended_questions, list) else 'N/A'}"
+        )
+
+        if (
+            recommended_questions
+            and isinstance(recommended_questions, list)
+            and len(recommended_questions) > 0
+        ):
             logger.info(f"📤 推送推荐问题，数量: {len(recommended_questions)}")
-            
+
             # 将推荐问题添加到已有的图表数据中
-            if t04_answer_data and "data" in t04_answer_data and isinstance(t04_answer_data["data"], dict):
+            if (
+                t04_answer_data
+                and "data" in t04_answer_data
+                and isinstance(t04_answer_data["data"], dict)
+            ):
                 t04_answer_data["data"]["recommended_questions"] = recommended_questions
                 payload = t04_answer_data["data"]
-                data_type = t04_answer_data.get("dataType", DataTypeEnum.BUS_DATA.value[0])
-                logger.info(f"📊 将推荐问题合并到已有图表数据中，payload keys: {list(payload.keys())}")
+                data_type = t04_answer_data.get(
+                    "dataType", DataTypeEnum.BUS_DATA.value[0]
+                )
+                logger.info(
+                    f"📊 将推荐问题合并到已有图表数据中，payload keys: {list(payload.keys())}"
+                )
             else:
                 # 如果没有图表数据，仅使用推荐问题构建数据结构
                 logger.info("📊 没有图表数据，仅使用推荐问题构建数据结构")
@@ -523,7 +643,7 @@ class ExcelAgent:
                 data_type = DataTypeEnum.BUS_DATA.value[0]
                 t04_answer_data.clear()
                 t04_answer_data.update({"data": payload, "dataType": data_type})
-            
+
             # 发送推荐问题
             logger.info(f"📤 准备发送推荐问题到前端，payload: {payload}")
             await self._send_response(
@@ -533,12 +653,20 @@ class ExcelAgent:
             )
             logger.info(f"✅ 已发送 {len(recommended_questions)} 个推荐问题到前端")
         else:
-            logger.warning(f"⚠️ 推荐问题为空或格式错误: recommended_questions={recommended_questions}, type={type(recommended_questions)}")
-        
+            logger.warning(
+                f"⚠️ 推荐问题为空或格式错误: recommended_questions={recommended_questions}, type={type(recommended_questions)}"
+            )
+
         logger.info("✅ 统一收集节点处理完成")
         return summarize_content
 
-    def _format_step_output(self, step_display_name: str, content: str, step_name: str, elapsed_time: Optional[float] = None) -> str:
+    def _format_step_output(
+        self,
+        step_display_name: str,
+        content: str,
+        step_name: str,
+        elapsed_time: Optional[float] = None,
+    ) -> str:
         """
         格式化步骤输出为 markdown 格式，包含步骤名称和分隔
         :param step_display_name: 步骤显示名称（中文）
@@ -553,10 +681,10 @@ class ExcelAgent:
                 content = json.dumps(content, ensure_ascii=False, indent=2)
             else:
                 content = str(content)
-        
+
         # 构建步骤标题（不包含耗时信息）
         step_header = f"## 📋 {step_display_name}\n\n"
-        
+
         # 根据步骤类型决定是否包装为代码块
         if step_name == "summarize":
             # summarize 步骤：内容已经是 markdown 格式，直接使用，不包装成代码块
@@ -566,12 +694,17 @@ class ExcelAgent:
             formatted = step_header + content
         else:
             # 其他步骤：根据步骤类型选择代码块语言
-            code_lang = "json" if step_name in ["sql_generator", "chart_generator", "question_recommender"] else "markdown"
+            code_lang = (
+                "json"
+                if step_name
+                in ["sql_generator", "chart_generator", "question_recommender"]
+                else "markdown"
+            )
             formatted = step_header + f"```{code_lang}\n{content}\n```"
-        
+
         # 添加分隔线，确保每个步骤独立分开显示
         separator = "\n\n---\n\n"
-        
+
         return formatted + separator
 
     @staticmethod
@@ -602,11 +735,16 @@ class ExcelAgent:
                 "data": progress_data,
                 "dataType": DataTypeEnum.STEP_PROGRESS.value[0],
             }
-            await response.write("data:" + json.dumps(formatted_message, ensure_ascii=False) + "\n\n")
+            await response.write(
+                "data:" + json.dumps(formatted_message, ensure_ascii=False) + "\n\n"
+            )
 
     @staticmethod
     async def _send_response(
-        response, content: Union[str, Dict[str, Any]], message_type: str = "continue", data_type: str = DataTypeEnum.ANSWER.value[0]
+        response,
+        content: Union[str, Dict[str, Any]],
+        message_type: str = "continue",
+        data_type: str = DataTypeEnum.ANSWER.value[0],
     ) -> None:
         """
         发送响应数据
@@ -628,11 +766,15 @@ class ExcelAgent:
                 # 业务数据（表格/图表），content 是字典
                 formatted_message = {"data": content, "dataType": data_type}
 
-            await response.write("data:" + json.dumps(formatted_message, ensure_ascii=False) + "\n\n")
+            await response.write(
+                "data:" + json.dumps(formatted_message, ensure_ascii=False) + "\n\n"
+            )
 
     @staticmethod
     def _create_response(
-        content: str, message_type: str = "continue", data_type: str = DataTypeEnum.ANSWER.value[0]
+        content: str,
+        message_type: str = "continue",
+        data_type: str = DataTypeEnum.ANSWER.value[0],
     ) -> str:
         """
         封装响应结构（保持向后兼容）
@@ -716,9 +858,7 @@ class ExcelAgent:
                 table_name = table.get("table_name", "未知表")
                 table_comment = table.get("table_comment", "")
                 columns = table.get("columns", {})
-                html_content += (
-                    f"<li>table_name:{table_name} | table_comment:{table_comment} | 列数: {len(columns)} </li>"
-                )
+                html_content += f"<li>table_name:{table_name} | table_comment:{table_comment} | 列数: {len(columns)} </li>"
 
             html_content += "</ol><br>"
 
@@ -732,48 +872,50 @@ class ExcelAgent:
         """
         # 优先使用保存的完整 JSON 响应
         sql_response_json = step_value.get("sql_response_json")
-        
+
         if sql_response_json:
             # 将完整的 JSON 响应格式化为 markdown 代码块
             json_str = json.dumps(sql_response_json, ensure_ascii=False, indent=2)
             return f"```json\n{json_str}\n```"
-        
+
         # 如果没有保存的 JSON，从现有字段构建
         generated_sql = step_value.get("generated_sql", "")
         chart_type = step_value.get("chart_type", "")
         used_tables = step_value.get("used_tables", [])
-        
+
         if not generated_sql or generated_sql == "No SQL query generated":
-            return "```json\n{\n  \"success\": false,\n  \"message\": \"SQL 生成失败\"\n}\n```"
-        
+            return (
+                '```json\n{\n  "success": false,\n  "message": "SQL 生成失败"\n}\n```'
+            )
+
         # 构建 JSON 响应
         sql_response = {
             "success": True,
             "sql": generated_sql,
             "tables": used_tables if used_tables else [],
-            "chart-type": chart_type if chart_type else "table"
+            "chart-type": chart_type if chart_type else "table",
         }
-        
+
         json_str = json.dumps(sql_response, ensure_ascii=False, indent=2)
         return f"```json\n{json_str}\n```"
-    
+
     @staticmethod
     def _format_chart_generator_output(step_value: Dict[str, Any]) -> str:
         """
         格式化图表生成器输出为 JSON 代码块格式
         """
         chart_config = step_value.get("chart_config")
-        
+
         if not chart_config:
             return "图表配置生成完成"
-        
+
         # 将图表配置格式化为 JSON 代码块
         if isinstance(chart_config, dict):
             config_json = json.dumps(chart_config, ensure_ascii=False, indent=2)
             return f"```json\n{config_json}\n```"
         else:
             return f"```json\n{str(chart_config)}\n```"
-    
+
     @staticmethod
     def _format_execution_result(execution_result) -> str:
         """
@@ -786,7 +928,9 @@ class ExcelAgent:
 
         if execution_result.success:
             row_count = len(execution_result.data) if execution_result.data else 0
-            column_count = len(execution_result.columns) if execution_result.columns else 0
+            column_count = (
+                len(execution_result.columns) if execution_result.columns else 0
+            )
             return f"✅ 查询执行成功！返回 {row_count} 行数据，{column_count} 列"
         else:
             return f"❌ 查询执行失败：{execution_result.error or '未知错误'}"
@@ -810,7 +954,9 @@ class ExcelAgent:
         for column_name, column_details in columns_info.items():
             comment = column_details.get("comment", column_name)
             type_ = column_details.get("type", "未知")
-            html_content += f"<li><strong>{column_name}</strong>: {comment} (类型: {type_})</li>\n"
+            html_content += (
+                f"<li><strong>{column_name}</strong>: {comment} (类型: {type_})</li>\n"
+            )
 
         html_content += """</ul>"""
 

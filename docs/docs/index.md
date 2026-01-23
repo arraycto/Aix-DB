@@ -1,77 +1,125 @@
-# 欢迎使用
- 
-## 什么是大模型数据助手?
+# 配置说明
 
-一个轻量级、支持全链路且易于二次开发的大模型应用项目 
-
-**已集成MCP多智能体架构**
-
-基于 **Dify 、LangChain1.0.x/LangGraph1.0.x、llamaIndex、Neo4j、MCP、Ollama&Vllm、Sanic 和 Text2SQL** 📊 等技术构建的一站式大模型应用开发项目，采用 
-**Vue3、TypeScript** 和 
-**Vite 5** 
-打造现代UI。它支持通过 **ECharts** 📈 / **AntV(mcp-server-chart)**
-实现基于大模型的数据图形化问答，具备处理 **CSV** 文件 📂 表格问答的能力。同时，能方便对接第三方开源 **RAG** 系统 检索系统 🌐等，以支持广泛的通用知识问答。
-
-作为轻量级的大模型应用开发项目，**Sanic-Web** 🛠️ 支持快速迭代与扩展，助力大模型项目快速落地。🚀
-
-## 整体架构
-- **多智能体**: 支持多模型、多智能体+MCP协同任务
-- **大模型交互**: 全面支持主流大模型交互框架，如 Dify 与 LangChain
-- **核心技术栈**：Dify + Ollama + RAG + (Qwen3/DeepSeek) + Text2SQL + MCP + Neo4J + LangGraph
-- **UI 框架**：Vue 3 + TypeScript + Vite 5
-- **数据问答**：集成 ECharts/AntV大模型实现Text2SQL轻量级的图形化数据问答展示
-- **表格问答**：支持 CSV格式文件的上传与基于大模型总结预处理和Text2SQL的表格数据问答
-- **通用问答**：支持通用数据形式问答基于对接三方RAG系统+公网检索模式
-- **应用架构**：作为一个轻量级全链路一站式大模型应用开发框架方便扩展落地
-- **灵活部署**：支持大模型应用开发各依赖组件docker-compose一键拉起快速部署零配置
-![image](images/app-01.png)
-
-## 版本说明
-- **v1.2.1不兼容v1.1.8以下的版本建议铲掉重新部署**
-
-| 版本     | 功能描述 | 使用Dify | 使用LangChain/MCP | 全库多表统计 | 多Sheet统计 |
-|--------|------|--------|-----------------|--------|---------|     
-| v1.2.1 | 智能问答 | **否**      | **是**           | -      | -       |
-| v1.2.1 | 数据问答 | **否**      | **是**           | **支持** | -       |
-| v1.2.1 | 表格问答 | **否**  | **是**                | -      | **支持**  |
-| v1.2.1 | 深度搜索 | **否**  | **是**                | -      | -       |
-
-## 迭代计划
-
-### 1. 对话
-#### 1.1 通用问答
-- ✅ 基于`LangGraph`+`MCP`+`RactAgent` 实现通用问答
-#### 1.2. 数据问答
-- ✅ 整库多表基于 `neo4j` 绘制库表血缘关系，数据问答时减少上下文表信息
-- ✅ 引入 `Embedding` + 向量检索作为 `BM25` 的补充（处理同义词、泛化）
-- ⏳ 基于 `llamaIndex` 构建多表数据问答 `few shot` 检索增强，提高模型效果
-- ⏳ 添加后台管理系统维护数据权限、库表 `Schema`、基于图数据库的表关系数据、多数据源管理等
-
-#### 1.3. 表格问答
-- ✅ 基于 `LangGraph` 构建基于大模型`单表格单` `sheet` 分析
-- ✅ 使用 `LangGraph` 构建基于大模型多表格多 `sheet` 联合 `Join` 分析
-
-#### 1.4. 深度搜索
-- ✅ 基于 `LangGraph/DeepAgent` 实现深度搜索功能
-
-### 2. 效率
-- ⏳ 添加具体垂直场景的智能体 + `MCP`
-
-### 3. 智能体
-- ⏳ 参考各大开源智能体框架实现对应功能
-
-### 4. 桌面端
-- ⏳ 添加桌面端应用APP
+> Aix-DB 系统配置指南
 
 ---
-> 🤝 **欢迎有想法的同学参与贡献，欢迎加入**
 
+## 目录
+
+- [系统设置](#系统设置)
+  - [第一步：配置大模型](#第一步配置大模型)
+  - [第二步：配置数据源](#第二步配置数据源)
+  - [第三步：配置全链路监控（可选）](#第三步配置全链路监控可选)
+
+---
+
+## 系统设置
+
+系统部署完成后，需要进行以下配置才能正常使用。
+
+### 第一步：配置大模型
+
+进入 **系统设置 → 模型配置**，添加您的大模型服务。
+
+![大模型配置](./images/llm_setting.png)
+
+**支持的模型类型：**
+
+| 类型 | 必填 | 说明 |
+|------|:----:|------|
+| **大语言模型** | ✅ | 用于意图理解、SQL 生成、对话交互（如 Qwen、DeepSeek、MiniMax） |
+| **Embedding 模型** | ❌ | 用于文本向量化，支持 RAG 检索（如 text-embedding-v4） |
+| **Rerank 模型** | ❌ | 用于检索结果重排序，提升检索精度（如 gte-rerank-v2） |
+
+> **提示**：Embedding 和 Rerank 模型为可选配置，系统默认可正常运行。如需提升检索精度，可额外配置这两类模型。
+
+**配置步骤：**
+
+1. 点击右上角 **+ 添加模型**
+2. 填写模型名称、选择模型类型
+3. 输入基础模型名称（如 `qwen-flash`、`deepseek-chat`）
+4. 配置 API 域名和密钥
+5. 点击 **设为默认模型** 启用该模型
+
+---
+
+### 第二步：配置数据源
+
+进入 **系统设置 → 库表配置**，添加您要查询的数据库。
+
+![数据源配置](./images/datasource_setting.png)
+
+**支持的数据源：**
+
+| 数据库 | 说明 |
+|--------|------|
+| MySQL | 主流关系型数据库 |
+| PostgreSQL | 功能强大的开源数据库 |
+| Oracle | 企业级数据库 |
+| SQL Server | 微软企业级数据库 |
+| ClickHouse | 列式存储分析数据库 |
+| StarRocks | 高性能分析数据库 |
+| Apache Doris | 实时分析数据库 |
+| 达梦 DM | 国产数据库 |
+
+**配置步骤：**
+
+1. 点击右上角 **+ 新建数据源**
+2. 选择数据库类型
+3. 填写连接信息：
+   - 主机地址（如 `host.docker.internal`）
+   - 端口号
+   - 数据库名称
+   - 用户名和密码
+4. 点击 **测试连接** 验证配置
+5. 保存后系统会自动同步表结构
+
+---
+
+### 第三步：配置全链路监控（可选）
+
+Aix-DB 支持 [Langfuse](https://langfuse.com/) 进行 LLM 调用的全链路监控和追踪。
+
+#### 安装 Langfuse
+
+```bash
+# 克隆 Langfuse 仓库
+git clone https://github.com/langfuse/langfuse.git
+cd langfuse
+
+# 启动 Langfuse 服务
+docker compose up
+```
+
+启动后访问 `http://localhost:3000` 创建项目并获取 API 密钥。
+
+#### 配置 Aix-DB
+
+在 `.env.dev` 或 `docker-compose.yaml` 中添加以下配置：
+
+```yaml
+# Langfuse 配置（可选）
+LANGFUSE_TRACING_ENABLED: ${LANGFUSE_TRACING_ENABLED:-false}
+LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
+LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
+LANGFUSE_BASE_URL: ${LANGFUSE_BASE_URL:-}
+```
+
+| 配置项 | 说明 |
+|--------|------|
+| `LANGFUSE_TRACING_ENABLED` | 是否启用追踪，设为 `true` 开启 |
+| `LANGFUSE_SECRET_KEY` | Langfuse 项目的 Secret Key |
+| `LANGFUSE_PUBLIC_KEY` | Langfuse 项目的 Public Key |
+| `LANGFUSE_BASE_URL` | Langfuse 服务地址（如 `http://localhost:3000`） |
+
+> **提示**：启用后可在 Langfuse 控制台查看 LLM 调用链路、Token 消耗、响应时间等监控数据。
+
+---
 
 ## 下一步
-- [环境配置](environment.md) - 配置DIFY环境/MCP环境
-- [快速体验](quick-start.md) -  容器启动快速体验
-- [本地开发](local-development.md) - 本地二次开发 
-- [常见问题](faq.md) - 整理一些常见问题
 
----
-**准备好开始了吗？** 让我们从 [环境配置](environment.md) 开始吧！
+配置完成后，您可以：
+
+1. 进入 **数据问答** 页面，开始使用自然语言查询数据
+2. 在 **术语配置** 中添加业务术语，提升查询准确率
+3. 在 **SQL 示例** 中添加常用查询模板

@@ -7,11 +7,11 @@ from typing import Optional
 
 from langchain.agents import create_agent
 from langchain.agents.middleware import (
-    SummarizationMiddleware,
-    ContextEditingMiddleware,
     ClearToolUsesEdit,
+    ContextEditingMiddleware,
+    SummarizationMiddleware,
 )
-from langchain_core.messages import SystemMessage, HumanMessage
+from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_mcp_adapters.client import MultiServerMCPClient
 from langgraph.checkpoint.memory import InMemorySaver
 
@@ -20,8 +20,8 @@ from common.llm_util import get_llm
 from common.minio_util import MinioUtils
 from constants.code_enum import DataTypeEnum, IntentEnum
 from services.user_service import add_user_record, decode_jwt_token
-from langfuse import get_client
-from langfuse.langchain import CallbackHandler
+
+# Langfuse 延迟导入，仅在启用 tracing 时导入
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +36,9 @@ class CommonReactAgent:
     def __init__(self):
 
         # 是否启用链路追踪
-        self.ENABLE_TRACING = os.getenv("LANGFUSE_TRACING_ENABLED", "true").lower() == "true"
+        self.ENABLE_TRACING = (
+            os.getenv("LANGFUSE_TRACING_ENABLED", "false").lower() == "true"
+        )
 
         # 使用 os.path 构建路径
         # current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -74,7 +76,9 @@ class CommonReactAgent:
 
     @staticmethod
     def _create_response(
-        content: str, message_type: str = "continue", data_type: str = DataTypeEnum.ANSWER.value[0]
+        content: str,
+        message_type: str = "continue",
+        data_type: str = DataTypeEnum.ANSWER.value[0],
     ) -> str:
         """封装响应结构"""
         res = {
@@ -115,7 +119,7 @@ class CommonReactAgent:
         try:
             t02_answer_data = []
 
-            tools = [] #await self.client.get_tools()
+            tools = []  # await self.client.get_tools()
 
             # 使用用户会话ID作为thread_id，如果未提供则使用默认值
             thread_id = session_id if session_id else "default_thread"
@@ -123,6 +127,9 @@ class CommonReactAgent:
 
             # 准备 tracing 配置
             if self.ENABLE_TRACING:
+                # 延迟导入，仅在启用时导入
+                from langfuse.langchain import CallbackHandler
+
                 langfuse_handler = CallbackHandler()
                 callbacks = [langfuse_handler]
                 config["callbacks"] = callbacks
@@ -273,6 +280,9 @@ class CommonReactAgent:
             }
 
             if self.ENABLE_TRACING:
+                # 延迟导入，仅在启用时导入
+                from langfuse import get_client
+
                 langfuse = get_client()
                 with langfuse.start_as_current_observation(
                     input=query,
@@ -282,9 +292,13 @@ class CommonReactAgent:
                     user_info = await decode_jwt_token(user_token)
                     user_id = user_info.get("id")
                     rootspan.update_trace(session_id=session_id, user_id=user_id)
-                    await self._stream_agent_response(agent, stream_args, response, task_id, t02_answer_data)
+                    await self._stream_agent_response(
+                        agent, stream_args, response, task_id, t02_answer_data
+                    )
             else:
-                await self._stream_agent_response(agent, stream_args, response, task_id, t02_answer_data)
+                await self._stream_agent_response(
+                    agent, stream_args, response, task_id, t02_answer_data
+                )
 
             # 只有在未取消的情况下才保存记录
             if not self.running_tasks[task_id]["cancelled"]:
@@ -300,27 +314,43 @@ class CommonReactAgent:
                 )
 
         except asyncio.CancelledError:
-            await response.write(self._create_response("\n> 这条消息已停止", "info", DataTypeEnum.ANSWER.value[0]))
-            await response.write(self._create_response("", "end", DataTypeEnum.STREAM_END.value[0]))
+            await response.write(
+                self._create_response(
+                    "\n> 这条消息已停止", "info", DataTypeEnum.ANSWER.value[0]
+                )
+            )
+            await response.write(
+                self._create_response("", "end", DataTypeEnum.STREAM_END.value[0])
+            )
         except Exception as e:
             print(f"[ERROR] Agent运行异常: {e}")
             traceback.print_exception(e)
             await response.write(
-                self._create_response("[ERROR] 智能体运行异常:", "error", DataTypeEnum.ANSWER.value[0])
+                self._create_response(
+                    "[ERROR] 智能体运行异常:", "error", DataTypeEnum.ANSWER.value[0]
+                )
             )
         finally:
             # 清理任务记录
             if task_id in self.running_tasks:
                 del self.running_tasks[task_id]
 
-    async def _stream_agent_response(self, agent, stream_args, response, task_id, t02_answer_data):
+    async def _stream_agent_response(
+        self, agent, stream_args, response, task_id, t02_answer_data
+    ):
         """处理agent流式响应的核心逻辑"""
         async for message_chunk, metadata in agent.astream(**stream_args):
             # 检查是否已取消
             if self.running_tasks[task_id]["cancelled"]:
-                await response.write(self._create_response("\n> 这条消息已停止", "info", DataTypeEnum.ANSWER.value[0]))
+                await response.write(
+                    self._create_response(
+                        "\n> 这条消息已停止", "info", DataTypeEnum.ANSWER.value[0]
+                    )
+                )
                 # 发送最终停止确认消息
-                await response.write(self._create_response("", "end", DataTypeEnum.STREAM_END.value[0]))
+                await response.write(
+                    self._create_response("", "end", DataTypeEnum.STREAM_END.value[0])
+                )
                 break
 
             # 工具输出

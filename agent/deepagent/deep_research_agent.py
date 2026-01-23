@@ -1,10 +1,10 @@
+import ast
 import asyncio
 import json
 import logging
 import os
 import re
 import traceback
-import ast
 from typing import Optional
 
 from deepagents import create_deep_agent
@@ -16,8 +16,8 @@ from common.llm_util import get_llm
 from common.minio_util import MinioUtils
 from constants.code_enum import DataTypeEnum, IntentEnum
 from services.user_service import add_user_record, decode_jwt_token
-from langfuse import get_client
-from langfuse.langchain import CallbackHandler
+
+# Langfuse 延迟导入，仅在启用 tracing 时导入
 
 logger = logging.getLogger(__name__)
 
@@ -37,7 +37,9 @@ class DeepAgent:
         self.checkpointer = InMemorySaver()
 
         # 是否启用链路追踪
-        self.ENABLE_TRACING = os.getenv("LANGFUSE_TRACING_ENABLED", "true").lower() == "true"
+        self.ENABLE_TRACING = (
+            os.getenv("LANGFUSE_TRACING_ENABLED", "false").lower() == "true"
+        )
 
         # 存储运行中的任务
         self.running_tasks = {}
@@ -47,12 +49,16 @@ class DeepAgent:
 
         # === 加载核心指令 ===
         # 从 instructions.md 文件读取系统提示词
-        with open(os.path.join(current_dir, "instructions.md"), "r", encoding="utf-8") as f:
+        with open(
+            os.path.join(current_dir, "instructions.md"), "r", encoding="utf-8"
+        ) as f:
             self.CORE_INSTRUCTIONS = f.read()
 
         # === 加载子智能体配置 ===
         # 从 subagents.json 文件读取各个子智能体的角色定义
-        with open(os.path.join(current_dir, "subagents.json"), "r", encoding="utf-8") as f:
+        with open(
+            os.path.join(current_dir, "subagents.json"), "r", encoding="utf-8"
+        ) as f:
             self.subagents_config = json.load(f)
 
         # 提取三个子智能体的配置
@@ -65,7 +71,9 @@ class DeepAgent:
 
     @staticmethod
     def _create_response(
-        content: str, message_type: str = "continue", data_type: str = DataTypeEnum.ANSWER.value[0]
+        content: str,
+        message_type: str = "continue",
+        data_type: str = DataTypeEnum.ANSWER.value[0],
     ) -> str:
         """封装响应结构"""
         res = {
@@ -108,6 +116,9 @@ class DeepAgent:
 
             # 准备 tracing 配置
             if self.ENABLE_TRACING:
+                # 延迟导入，仅在启用时导入
+                from langfuse.langchain import CallbackHandler
+
                 langfuse_handler = CallbackHandler()
                 callbacks = [langfuse_handler]
                 config["callbacks"] = callbacks
@@ -138,6 +149,9 @@ class DeepAgent:
 
             # 如果启用 tracing，包裹在 trace 上下文中
             if self.ENABLE_TRACING:
+                # 延迟导入，仅在启用时导入
+                from langfuse import get_client
+
                 langfuse = get_client()
                 with langfuse.start_as_current_observation(
                     input=query,
@@ -174,20 +188,38 @@ class DeepAgent:
                 )
 
         except asyncio.CancelledError:
-            await response.write(self._create_response("\n> ⚠️ 任务已被取消", "info", DataTypeEnum.ANSWER.value[0]))
-            await response.write(self._create_response("", "end", DataTypeEnum.STREAM_END.value[0]))
+            await response.write(
+                self._create_response(
+                    "\n> ⚠️ 任务已被取消", "info", DataTypeEnum.ANSWER.value[0]
+                )
+            )
+            await response.write(
+                self._create_response("", "end", DataTypeEnum.STREAM_END.value[0])
+            )
         except Exception as e:
             logger.error(f"Agent运行异常: {e}")
             traceback.print_exception(e)
             error_msg = f"❌ **错误**: 智能体运行异常\n\n```\n{str(e)}\n```\n"
-            await response.write(self._create_response(error_msg, "error", DataTypeEnum.ANSWER.value[0]))
+            await response.write(
+                self._create_response(error_msg, "error", DataTypeEnum.ANSWER.value[0])
+            )
         finally:
             # 清理任务记录
             if task_id in self.running_tasks:
                 del self.running_tasks[task_id]
 
     async def _stream_agent_response(
-        self, agent, stream_args, response, task_id, t02_answer_data, uuid_str, session_id, query, file_list, user_token
+        self,
+        agent,
+        stream_args,
+        response,
+        task_id,
+        t02_answer_data,
+        uuid_str,
+        session_id,
+        query,
+        file_list,
+        user_token,
     ):
         """处理agent流式响应的核心逻辑"""
         plan_task_mesage = False
@@ -197,9 +229,13 @@ class DeepAgent:
             # 检查是否已取消
             if self.running_tasks[task_id]["cancelled"]:
                 await response.write(
-                    self._create_response("\n> ⚠️ 任务已被用户取消", "info", DataTypeEnum.ANSWER.value[0])
+                    self._create_response(
+                        "\n> ⚠️ 任务已被用户取消", "info", DataTypeEnum.ANSWER.value[0]
+                    )
                 )
-                await response.write(self._create_response("", "end", DataTypeEnum.STREAM_END.value[0]))
+                await response.write(
+                    self._create_response("", "end", DataTypeEnum.STREAM_END.value[0])
+                )
                 break
 
             # 获取当前节点信息
@@ -211,10 +247,10 @@ class DeepAgent:
 
                 if tool_name == "write_todos":
                     if not plan_task_mesage:
-                        plan_markdown_str, plan_markdown_list = self.extract_content_as_markdown_list(
-                            message_chunk.content
+                        plan_markdown_str, plan_markdown_list = (
+                            self.extract_content_as_markdown_list(message_chunk.content)
                         )
-                        think_html = f"""<details style="color:gray;background-color: #f8f8f8;padding: 2px;border-radius: 
+                        think_html = f"""<details style="color:gray;background-color: #f8f8f8;padding: 2px;border-radius:
                                           6px;margin-top:5px;">
                                                 <summary>{query}-任务规划如下:\n</summary>"""
                         think_html += f"""{plan_markdown_str}"""

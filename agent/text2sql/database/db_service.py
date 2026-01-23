@@ -22,7 +22,8 @@ import numpy as np
 import pandas as pd
 import requests
 
-from langfuse.openai import OpenAI
+# Langfuse OpenAI 延迟导入，避免在模块加载时触发 Langfuse 客户端初始化
+# from langfuse.openai import OpenAI
 from rank_bm25 import BM25Okapi
 from sqlalchemy.inspection import inspect
 from sqlalchemy.sql.expression import text
@@ -158,6 +159,8 @@ class DatabaseService:
         if emb_config:
             # 使用在线 embedding 模型
             try:
+                # 延迟导入，避免在模块加载时触发 Langfuse 客户端初始化
+                from langfuse.openai import OpenAI
                 self.embedding_model_name = emb_config["name"]
                 self.embedding_client = OpenAI(api_key=emb_config["api_key"] or "empty", base_url=emb_config["base_url"])
                 self.use_local_embedding = False

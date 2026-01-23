@@ -15,20 +15,19 @@ services:
     environment:
       # 时区
       TZ: Asia/Shanghai
-
       # 后端服务配置
       SERVER_HOST: 0.0.0.0
       SERVER_PORT: ${SERVER_PORT:-8088}
-      SERVER_WORKERS: ${SERVER_WORKERS:-1}  # 开发模式用单 worker 方便调试
+      SERVER_WORKERS: ${SERVER_WORKERS:-1} # 开发模式用单 worker 方便调试
+
+      # 开发模式：启用更详细的日志
+      LOG_LEVEL: ${LOG_LEVEL:-DEBUG}
 
       # Langfuse 配置（可选）
       LANGFUSE_TRACING_ENABLED: ${LANGFUSE_TRACING_ENABLED:-false}
       LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
       LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
       LANGFUSE_BASE_URL: ${LANGFUSE_BASE_URL:-}
-
-      # 开发模式：启用更详细的日志
-      LOG_LEVEL: ${LOG_LEVEL:-DEBUG}
 
     ports:
       # 前端（通过 nginx）

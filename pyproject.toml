@@ -89,3 +89,26 @@ default = true
 
 # 固定版本避免了依赖版本升级带来的问题。
 # uv pip freeze > requirements.txt
+
+# Black 代码格式化配置
+[tool.black]
+line-length = 88
+target-version = ['py311']
+include = '\.pyi?$'
+extend-exclude = '''
+/(
+  # directories
+  \.eggs
+  | \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | venv
+  | _build
+  | buck-out
+  | build
+  | dist
+  | __pycache__
+)/
+'''

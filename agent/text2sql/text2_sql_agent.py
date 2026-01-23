@@ -4,7 +4,7 @@ import logging
 import os
 import time
 import uuid
-from typing import Dict, Any, Optional, Union
+from typing import Any, Dict, Optional, Union
 
 from langgraph.graph.state import CompiledStateGraph
 
@@ -12,8 +12,8 @@ from agent.text2sql.analysis.graph import create_graph
 from agent.text2sql.state.agent_state import AgentState
 from constants.code_enum import DataTypeEnum, IntentEnum
 from services.user_service import add_user_record, decode_jwt_token
-from langfuse import get_client
-from langfuse.langchain import CallbackHandler
+
+# Langfuse 延迟导入，仅在启用 tracing 时导入
 
 logger = logging.getLogger(__name__)
 
@@ -45,7 +45,9 @@ class Text2SqlAgent:
         # 存储运行中的任务
         self.running_tasks = {}
         # 是否启用链路追踪
-        self.ENABLE_TRACING = os.getenv("LANGFUSE_TRACING_ENABLED", "true").lower() == "true"
+        self.ENABLE_TRACING = (
+            os.getenv("LANGFUSE_TRACING_ENABLED", "false").lower() == "true"
+        )
         # 存储步骤开始时间（用于计算耗时）
         self.step_start_times = {}
         # 存储步骤的 progressId
@@ -80,42 +82,51 @@ class Text2SqlAgent:
             user_dict = await decode_jwt_token(user_token)
             user_id = user_dict.get("id", 1)  # 默认为管理员
             task_id = user_dict["id"]
-            
+
             initial_state = AgentState(
                 user_query=query,
                 attempts=0,
                 correct_attempts=0,
                 datasource_id=datasource_id,
-                user_id=user_id
+                user_id=user_id,
             )
-            
+
             # 检查数据源权限（如果指定了 datasource_id）
             # 权限检查结果会通过 datasource_selector 节点处理，统一通过 error_handler 节点流式输出
             if datasource_id:
-                from model.db_connection_pool import get_db_pool
-                from model.datasource_models import DatasourceAuth
-                from common.permission_util import is_admin
                 from sqlalchemy import and_
-                
+
+                from common.permission_util import is_admin
+                from model.datasource_models import DatasourceAuth
+                from model.db_connection_pool import get_db_pool
+
                 db_pool = get_db_pool()
                 with db_pool.get_session() as session:
                     # 管理员跳过权限检查
                     if not is_admin(user_id):
                         # 检查用户是否有该数据源的权限
-                        auth = session.query(DatasourceAuth).filter(
-                            and_(
-                                DatasourceAuth.datasource_id == datasource_id,
-                                DatasourceAuth.user_id == user_id,
-                                DatasourceAuth.enable == True
+                        auth = (
+                            session.query(DatasourceAuth)
+                            .filter(
+                                and_(
+                                    DatasourceAuth.datasource_id == datasource_id,
+                                    DatasourceAuth.user_id == user_id,
+                                    DatasourceAuth.enable == True,
+                                )
                             )
-                        ).first()
-                        
+                            .first()
+                        )
+
                         if not auth:
                             # 无权限，设置错误消息，让 error_handler 节点统一处理
                             error_msg = "您没有访问该数据源的权限，请联系管理员授权。"
-                            logger.warning(f"用户 {user_id} 尝试访问未授权的数据源 {datasource_id}")
+                            logger.warning(
+                                f"用户 {user_id} 尝试访问未授权的数据源 {datasource_id}"
+                            )
                             initial_state["error_message"] = error_msg
-                            initial_state["datasource_id"] = None  # 清空 datasource_id，让流程进入 error_handler
+                            initial_state["datasource_id"] = (
+                                None  # 清空 datasource_id，让流程进入 error_handler
+                            )
             graph: CompiledStateGraph = create_graph(datasource_id)
 
             # 标识对话状态
@@ -125,6 +136,9 @@ class Text2SqlAgent:
             # 准备 tracing 配置
             config = {}
             if self.ENABLE_TRACING:
+                # 延迟导入，仅在启用时导入
+                from langfuse.langchain import CallbackHandler
+
                 langfuse_handler = CallbackHandler()
                 callbacks = [langfuse_handler]
                 config = {
@@ -143,6 +157,9 @@ class Text2SqlAgent:
 
             # 如果启用 tracing，包裹在 trace 上下文中
             if self.ENABLE_TRACING:
+                # 延迟导入，仅在启用时导入
+                from langfuse import get_client
+
                 langfuse = get_client()
                 with langfuse.start_as_current_observation(
                     input=query,
@@ -154,7 +171,12 @@ class Text2SqlAgent:
 
                     async for chunk_dict in graph.astream(**stream_kwargs):
                         current_step, t02_answer_data = await self._process_chunk(
-                            chunk_dict, response, task_id, current_step, t02_answer_data, t04_answer_data
+                            chunk_dict,
+                            response,
+                            task_id,
+                            current_step,
+                            t02_answer_data,
+                            t04_answer_data,
                         )
                         # 跟踪permission_filter节点后的SQL语句
                         if "permission_filter" in chunk_dict:
@@ -165,7 +187,12 @@ class Text2SqlAgent:
             else:
                 async for chunk_dict in graph.astream(**stream_kwargs):
                     current_step, t02_answer_data = await self._process_chunk(
-                        chunk_dict, response, task_id, current_step, t02_answer_data, t04_answer_data
+                        chunk_dict,
+                        response,
+                        task_id,
+                        current_step,
+                        t02_answer_data,
+                        t04_answer_data,
                     )
                     # 跟踪permission_filter节点后的SQL语句
                     if "permission_filter" in chunk_dict:
@@ -193,12 +220,18 @@ class Text2SqlAgent:
                     await self._send_response(
                         response=response,
                         content={"record_id": record_id},
-                        data_type=DataTypeEnum.RECORD_ID.value[0]
+                        data_type=DataTypeEnum.RECORD_ID.value[0],
                     )
 
         except asyncio.CancelledError:
-            await response.write(self._create_response("\n> 这条消息已停止", "info", DataTypeEnum.ANSWER.value[0]))
-            await response.write(self._create_response("", "end", DataTypeEnum.STREAM_END.value[0]))
+            await response.write(
+                self._create_response(
+                    "\n> 这条消息已停止", "info", DataTypeEnum.ANSWER.value[0]
+                )
+            )
+            await response.write(
+                self._create_response("", "end", DataTypeEnum.STREAM_END.value[0])
+            )
         except Exception as e:
             logger.error(f"Error in run_agent: {str(e)}", exc_info=True)
             error_msg = f"处理过程中发生错误: {str(e)}"
@@ -218,9 +251,15 @@ class Text2SqlAgent:
         """
         # 检查是否已取消
         if task_id in self.running_tasks and self.running_tasks[task_id]["cancelled"]:
-            await response.write(self._create_response("\n> 这条消息已停止", "info", DataTypeEnum.ANSWER.value[0]))
+            await response.write(
+                self._create_response(
+                    "\n> 这条消息已停止", "info", DataTypeEnum.ANSWER.value[0]
+                )
+            )
             # 发送最终停止确认消息
-            await response.write(self._create_response("", "end", DataTypeEnum.STREAM_END.value[0]))
+            await response.write(
+                self._create_response("", "end", DataTypeEnum.STREAM_END.value[0])
+            )
             raise asyncio.CancelledError()
 
         langgraph_step, step_value = next(iter(chunk_dict.items()))
@@ -232,8 +271,10 @@ class Text2SqlAgent:
 
         # 处理具体步骤内容
         if step_value:
-            await self._process_step_content(response, langgraph_step, step_value, t02_answer_data, t04_answer_data)
-        
+            await self._process_step_content(
+                response, langgraph_step, step_value, t02_answer_data, t04_answer_data
+            )
+
         # 所有步骤都发送完成信息（无论是否有 step_value）
         if langgraph_step in self.step_progress_ids:
             progress_id = self.step_progress_ids.get(langgraph_step)
@@ -265,7 +306,7 @@ class Text2SqlAgent:
         if new_step and new_step not in self.step_start_times:
             self.step_start_times[new_step] = time.perf_counter()
             logger.debug(f"步骤 {new_step} 开始")
-            
+
             # 生成新的 progressId 并发送步骤开始信息
             progress_id = str(uuid.uuid4())
             self.step_progress_ids[new_step] = progress_id
@@ -299,7 +340,7 @@ class Text2SqlAgent:
             elapsed_time = end_time - start_time
             logger.debug(f"步骤 {step_name} 耗时: {elapsed_time:.3f}秒")
             del self.step_start_times[step_name]
-        
+
         content_map = {
             # 数据源异常节点：仅输出友好的错误提示，不再继续后续步骤
             "error_handler": lambda: step_value.get(
@@ -307,17 +348,25 @@ class Text2SqlAgent:
                 "当前没有可用的数据源，请联系管理员。",
             ),
             "schema_inspector": lambda: self._format_db_info_with_bm25(step_value),
-            "table_relationship": lambda: json.dumps(step_value["table_relationship"], ensure_ascii=False),
+            "table_relationship": lambda: json.dumps(
+                step_value["table_relationship"], ensure_ascii=False
+            ),
             "sql_generator": lambda: step_value["generated_sql"],
             # 权限过滤节点：输出注入权限后的 SQL，如果没有则回退到原始 SQL
             "permission_filter": lambda: step_value.get("filtered_sql")
             or step_value.get("generated_sql", "No SQL query generated"),
             # SQL 执行节点：成功/失败分别返回不同信息，失败时截取一段错误详情
-            "sql_executor": lambda: self._format_sql_execution_message(step_value.get("execution_result")),
+            "sql_executor": lambda: self._format_sql_execution_message(
+                step_value.get("execution_result")
+            ),
             # 图表生成节点：输出最终选定的图表类型
             "chart_generator": lambda: self._format_chart_type_message(step_value),
             "summarize": lambda: step_value.get("report_summary", ""),
-            "data_render": lambda: step_value.get("render_data", {}) if step_value.get("render_data") else {},  # 返回对象，不是 JSON 字符串
+            "data_render": lambda: (
+                step_value.get("render_data", {})
+                if step_value.get("render_data")
+                else {}
+            ),  # 返回对象，不是 JSON 字符串
             # 统一收集节点：不在 content_map 中处理，由 _process_unified_collector 专门处理
             # "unified_collector": lambda: self._format_unified_collector_message(step_value),
         }
@@ -328,7 +377,9 @@ class Text2SqlAgent:
 
             # 数据渲染节点返回业务数据
             data_type = (
-                DataTypeEnum.BUS_DATA.value[0] if step_name == "data_render" else DataTypeEnum.ANSWER.value[0]
+                DataTypeEnum.BUS_DATA.value[0]
+                if step_name == "data_render"
+                else DataTypeEnum.ANSWER.value[0]
             )
 
             # unified_collector 节点由专门的 _process_unified_collector 处理，不在这里发送格式化消息
@@ -336,19 +387,26 @@ class Text2SqlAgent:
             should_send = step_name in ["error_handler", "summarize"]
 
             if should_send:
-                await self._send_response(response=response, content=content, data_type=data_type)
+                await self._send_response(
+                    response=response, content=content, data_type=data_type
+                )
 
                 # 只保存关键步骤的内容到数据库
                 if data_type == DataTypeEnum.ANSWER.value[0]:
                     t02_answer_data.append(content)
 
             # 这里设置渲染数据
-            if step_name == "data_render" and data_type == DataTypeEnum.BUS_DATA.value[0]:
+            if (
+                step_name == "data_render"
+                and data_type == DataTypeEnum.BUS_DATA.value[0]
+            ):
                 render_data = step_value.get("render_data", {})
                 t04_answer_data.clear()
                 t04_answer_data.update({"data": render_data, "dataType": data_type})
                 # 发送渲染数据
-                await self._send_response(response=response, content=render_data, data_type=data_type)
+                await self._send_response(
+                    response=response, content=render_data, data_type=data_type
+                )
 
             # 对于非渲染步骤，刷新响应
             if step_name != "data_render":
@@ -364,7 +422,7 @@ class Text2SqlAgent:
             )
             # 处理完 unified_collector 后直接返回，不再通过 content_map 发送内容
             return
-        
+
         # 处理推荐问题：将推荐问题合并到已有的图表数据中发送到前端（在 content_map 之外处理）
         # 注意：如果使用了 unified_collector，这个分支可能不会执行
         if step_name == "question_recommender":
@@ -375,7 +433,11 @@ class Text2SqlAgent:
                 f"t04_answer_data: {t04_answer_data}"
             )
 
-            if recommended_questions and isinstance(recommended_questions, list) and len(recommended_questions) > 0:
+            if (
+                recommended_questions
+                and isinstance(recommended_questions, list)
+                and len(recommended_questions) > 0
+            ):
                 # 获取已有的图表数据，如果没有则创建新的数据结构
                 if (
                     t04_answer_data
@@ -384,9 +446,13 @@ class Text2SqlAgent:
                     and t04_answer_data["data"]
                 ):
                     # 将推荐问题添加到已有的图表数据中
-                    t04_answer_data["data"]["recommended_questions"] = recommended_questions
+                    t04_answer_data["data"][
+                        "recommended_questions"
+                    ] = recommended_questions
                     payload = t04_answer_data["data"]
-                    data_type = t04_answer_data.get("dataType", DataTypeEnum.BUS_DATA.value[0])
+                    data_type = t04_answer_data.get(
+                        "dataType", DataTypeEnum.BUS_DATA.value[0]
+                    )
                 else:
                     # 如果没有图表数据，仅使用推荐问题构建数据结构
                     logger.warning(
@@ -424,14 +490,14 @@ class Text2SqlAgent:
     ) -> None:
         """
         处理统一收集节点：按顺序推送 summarize → 图表数据 → 推荐问题
-        
+
         要求：
         1. 首先推送 summarize（文本总结）
         2. 然后推送图表数据（render_data）
         3. 最后推送推荐问题（recommended_questions）
         """
         logger.info("📦 开始处理统一收集节点")
-        
+
         # 1. 推送 summarize（结果总结）
         report_summary = step_value.get("report_summary")
         if report_summary:
@@ -443,39 +509,51 @@ class Text2SqlAgent:
             )
             # 收集到 t02_answer_data
             t02_answer_data.append(report_summary)
-        
+
         # 2. 推送图表数据（render_data）
         render_data = step_value.get("render_data", {})
         if render_data:
             logger.info("📤 推送图表数据")
             # 更新 t04_answer_data
             t04_answer_data.clear()
-            t04_answer_data.update({"data": render_data, "dataType": DataTypeEnum.BUS_DATA.value[0]})
-            
+            t04_answer_data.update(
+                {"data": render_data, "dataType": DataTypeEnum.BUS_DATA.value[0]}
+            )
+
             # 发送图表数据
             await self._send_response(
                 response=response,
                 content=render_data,
                 data_type=DataTypeEnum.BUS_DATA.value[0],
             )
-        
+
         # 3. 推送推荐问题（recommended_questions）
         recommended_questions = step_value.get("recommended_questions", [])
-        if recommended_questions and isinstance(recommended_questions, list) and len(recommended_questions) > 0:
+        if (
+            recommended_questions
+            and isinstance(recommended_questions, list)
+            and len(recommended_questions) > 0
+        ):
             logger.info(f"📤 推送推荐问题，数量: {len(recommended_questions)}")
-            
+
             # 将推荐问题添加到已有的图表数据中
-            if t04_answer_data and "data" in t04_answer_data and isinstance(t04_answer_data["data"], dict):
+            if (
+                t04_answer_data
+                and "data" in t04_answer_data
+                and isinstance(t04_answer_data["data"], dict)
+            ):
                 t04_answer_data["data"]["recommended_questions"] = recommended_questions
                 payload = t04_answer_data["data"]
-                data_type = t04_answer_data.get("dataType", DataTypeEnum.BUS_DATA.value[0])
+                data_type = t04_answer_data.get(
+                    "dataType", DataTypeEnum.BUS_DATA.value[0]
+                )
             else:
                 # 如果没有图表数据，仅使用推荐问题构建数据结构
                 payload = {"recommended_questions": recommended_questions}
                 data_type = DataTypeEnum.BUS_DATA.value[0]
                 t04_answer_data.clear()
                 t04_answer_data.update({"data": payload, "dataType": data_type})
-            
+
             # 发送推荐问题
             await self._send_response(
                 response=response,
@@ -485,7 +563,7 @@ class Text2SqlAgent:
             logger.info(f"✅ 已发送 {len(recommended_questions)} 个推荐问题到前端")
         else:
             logger.warning(f"⚠️ 推荐问题为空或格式错误: {recommended_questions}")
-        
+
         logger.info("✅ 统一收集节点处理完成")
 
     @staticmethod
@@ -538,46 +616,50 @@ class Text2SqlAgent:
         格式：先显示关键词，再显示检索到的表信息。
         """
         db_info: Dict[str, Any] = step_value.get("db_info") or {}
-        
+
         # 从 step_value 中获取 BM25 分词信息
         bm25_tokens = step_value.get("bm25_tokens") or []
         user_query = step_value.get("user_query", "")
-        
+
         # 调试日志：检查 step_value 中的字段
         logger.debug(f"schema_inspector step_value keys: {list(step_value.keys())}")
-        logger.debug(f"bm25_tokens in step_value: {bm25_tokens}, type: {type(bm25_tokens)}")
+        logger.debug(
+            f"bm25_tokens in step_value: {bm25_tokens}, type: {type(bm25_tokens)}"
+        )
         logger.debug(f"user_query in step_value: {user_query}")
 
         # 构建输出内容：先关键词，后表信息
         parts = []
-        
+
         # 1. 关键词部分
         if user_query:
             if isinstance(bm25_tokens, list) and bm25_tokens:
                 # 过滤掉无意义的单字符词（如"的"、"各"等），保留有意义的词
-                meaningful_tokens = [token for token in bm25_tokens if len(token) > 1 or token.isalnum()]
+                meaningful_tokens = [
+                    token for token in bm25_tokens if len(token) > 1 or token.isalnum()
+                ]
                 # 如果过滤后还有词，使用过滤后的；否则使用原始的
                 display_tokens = meaningful_tokens if meaningful_tokens else bm25_tokens
-                
+
                 # 只展示前若干个分词，避免过长
                 max_tokens = 10
                 shown_tokens = display_tokens[:max_tokens]
                 tokens_str = "、".join(shown_tokens)
                 if len(display_tokens) > max_tokens:
                     tokens_str += " 等"
-                
+
                 # 简洁格式：直接显示关键词
                 parts.append(f"关键词：{tokens_str}")
             else:
                 # 分词结果为空时，使用原始查询作为关键词
                 parts.append(f"关键词：{user_query}")
                 logger.info(f"BM25 分词结果为空，使用原始查询作为关键词: {user_query}")
-        
+
         # 2. 表信息部分（放在关键词下面）
         table_text = self._format_db_info_compact(db_info)
         if table_text:
             parts.append(table_text)
-        
+
         # 组合输出
         return "\n\n".join(parts) if parts else table_text
 
@@ -629,7 +711,7 @@ class Text2SqlAgent:
 
         table_count = len(db_info)
         table_lines = []
-        
+
         for table_name, table_info in db_info.items():
             # 获取表注释
             table_comment = table_info.get("table_comment", "")
@@ -637,7 +719,7 @@ class Text2SqlAgent:
                 table_lines.append(f"  • {table_name} - {table_comment}")
             else:
                 table_lines.append(f"  • {table_name}")
-        
+
         tables_text = "\n".join(table_lines)
         return f"检索到 {table_count} 张表：\n{tables_text}"
 
@@ -669,11 +751,16 @@ class Text2SqlAgent:
                 "data": progress_data,
                 "dataType": DataTypeEnum.STEP_PROGRESS.value[0],
             }
-            await response.write("data:" + json.dumps(formatted_message, ensure_ascii=False) + "\n\n")
+            await response.write(
+                "data:" + json.dumps(formatted_message, ensure_ascii=False) + "\n\n"
+            )
 
     @staticmethod
     async def _send_response(
-        response, content: Union[str, Dict[str, Any]], message_type: str = "continue", data_type: str = DataTypeEnum.ANSWER.value[0]
+        response,
+        content: Union[str, Dict[str, Any]],
+        message_type: str = "continue",
+        data_type: str = DataTypeEnum.ANSWER.value[0],
     ) -> None:
         """
         发送响应数据
@@ -695,11 +782,15 @@ class Text2SqlAgent:
                 # 适配EChart表格
                 formatted_message = {"data": content, "dataType": data_type}
 
-            await response.write("data:" + json.dumps(formatted_message, ensure_ascii=False) + "\n\n")
+            await response.write(
+                "data:" + json.dumps(formatted_message, ensure_ascii=False) + "\n\n"
+            )
 
     @staticmethod
     def _create_response(
-        content: str, message_type: str = "continue", data_type: str = DataTypeEnum.ANSWER.value[0]
+        content: str,
+        message_type: str = "continue",
+        data_type: str = DataTypeEnum.ANSWER.value[0],
     ) -> str:
         """
         封装响应结构（保持向后兼容）
